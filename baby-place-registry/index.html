@@ -46,10 +46,15 @@
   .mono { font-family:'IBM Plex Mono', monospace; }
   .app { width:100%; max-width:420px; min-height:100vh; background:#FDF4EC; box-shadow:0 0 40px rgba(0,0,0,0.06); position:relative; }
   .header { padding:32px 20px 16px; }
-  .header .taghead { display:flex; align-items:center; gap:6px; }
+  /* 머리말 버튼 줄. **줄바꿈은 이 행이 한다** — 버튼 안에서 낱말을 쪼개지 않는다.
+     (B-1, 2026-09-26: `body`에 `keep-all`이 걸려 있는데도 「내보내기」가 360·390·430px 전부에서
+      두 줄로 깨졌다. 같은 자리의 `overflow-wrap:break-word`가 칸이 좁아지는 순간 이기기 때문이다.
+      `keep-all`은 「낱말 안에서 끊지 마라」이지 「칸을 넓혀라」가 아니다.) */
+  .header .taghead { display:flex; align-items:center; gap:6px; flex-wrap:wrap; row-gap:8px; }
   .header .tag { font-size:10px; letter-spacing:.2em; color:#9E4B34; margin:0; }
   .header h1 { font-size:24px; margin:4px 0 0; color:#3B2E2A; }
   .header p.sub { font-size:12px; margin:4px 0 0; color:#655E56; }
+  .addhint { font-size:12px; margin:0 0 6px; color:#655E56; }
 
   .map-wrap { position:relative; margin:0 20px 16px; border-radius:16px; overflow:hidden; border:1px solid #EDE0D2; height:260px; background:#EFE4D8; }
   #map { width:100%; height:100%; }
@@ -117,6 +122,7 @@
   .clearbtn { background:none; border:none; cursor:pointer; color:#655E56; font-size:12px; padding:0 4px; opacity:0; pointer-events:none; }
   .clearbtn.show { opacity:1; pointer-events:auto; }
   .sortrow { padding:8px 20px 0; display:flex; gap:6px; overflow-x:auto; }
+  .sortsep { flex-shrink:0; width:1px; align-self:stretch; background:#EDE0D2; margin:0 2px; }
   .sortbtn { flex-shrink:0; padding:5px 11px; border-radius:999px; font-size:11px; font-weight:500; border:1px solid #EDE0D2; background:#fff; color:#5C564F; cursor:pointer; }
   .sortbtn.active { background:#3B2E2A; color:#FDF4EC; }
   .groupbtn.active { background:#3AAFA9; }
@@ -128,7 +134,12 @@
   .empty { text-align:center; font-size:12px; color:#655E56; padding:40px 0; }
   .pcard { border-radius:16px; padding:14px 16px; background:#fff; border:1px solid #EDE0D2; cursor:pointer; transition:box-shadow .3s, border-color .3s; }
   .pcard.highlight { border-color:#FF7B54; box-shadow:0 0 0 3px rgba(255,123,84,0.18); }
-  .pcard-top { display:flex; align-items:flex-start; justify-content:space-between; }
+  /* 3줄 배치(B-3). 각 줄이 자기 몫만 쓰게 하고, 만족도·삭제가 줄을 통째로 먹지 않게 한다. */
+  .pcard-l1 { display:flex; align-items:center; gap:6px; }
+  .pcard-l2 { display:flex; align-items:center; gap:8px; margin-top:6px; }
+  .pcard-l3 { display:flex; align-items:center; gap:8px; margin-top:4px; }
+  .pcard-tags { display:flex; align-items:center; gap:5px; flex-wrap:wrap; flex:1; min-width:0; }
+  .psrc { font-size:10px; color:#655E56; flex-shrink:0; }
   .pcard-meta { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   .badge { font-size:10px; font-weight:600; padding:2px 8px; border-radius:999px; color:#fff; }
   .noloc { font-size:10px; font-weight:500; color:#9E4B34; }
@@ -151,14 +162,16 @@
   .pname, .paddr, .pmemo, .draft-addr,
   .badge, .fbtn, .chip, .ub-text, .region-header, .searchrow b, .searchrow span, .typemgr-row
     { overflow-wrap:anywhere; min-width:0; }
-  .pname { font-size:14px; font-weight:500; margin-top:6px; color:#3B2E2A; }
-  .paddr { font-size:11px; margin-top:2px; color:#B98B4E; }
-  .pmemo { font-size:12px; margin-top:4px; line-height:1.5; color:#655E56; }
-  .starbtn { background:none; border:none; cursor:pointer; font-size:16px; }
-  .satrow { display:flex; gap:6px; margin-top:10px; }
-  .satbtn { flex:1; padding:6px; border-radius:8px; font-size:11px; font-weight:500; border:1px solid #EDE0D2; background:#FDF9F4; color:#5C564F; cursor:pointer; }
+  .pname { font-size:14px; font-weight:500; color:#3B2E2A; flex:1; min-width:0; }
+  .paddr { font-size:11px; color:#B98B4E; }
+  /* 메모는 한 줄로 자른다 — 목록을 훑는 화면이라 카드 높이가 들쭉날쭉하면 안 된다.
+     전체 내용은 카드를 탭해 수정 모드에서 본다. */
+  .pmemo { font-size:12px; line-height:1.5; color:#655E56; flex:1; min-width:0;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .starbtn { background:none; border:none; cursor:pointer; font-size:16px; flex-shrink:0; min-width:32px; }
+  .satrow { display:flex; gap:4px; flex-shrink:0; }
+  .satbtn { padding:5px 8px; border-radius:8px; font-size:11px; font-weight:500; border:1px solid #EDE0D2; background:#FDF9F4; color:#5C564F; cursor:pointer; }
   .satbtn:disabled { cursor:default; opacity:.7; }
-  .delrow { display:flex; justify-content:flex-end; margin-top:8px; }
   /* 터치 영역은 44×44가 권장이다(이전 실측 32×16). 아기 안고 한 손 엄지로 쓰는 앱이다.
      보이는 글씨 크기는 그대로 두고 **영역만** 넓힌다. */
   .delbtn { background:none; border:none; cursor:pointer; font-size:10px; color:#655E56;
@@ -177,6 +190,11 @@
   .footnote { margin:0 20px 32px; border-radius:12px; padding:14px; background:#F3E7D9; color:#5C564F; font-size:11px; line-height:1.6; }
 
   .sharebtn { background:none; border:none; cursor:pointer; font-size:12px; color:#9E4B34; margin-left:auto; padding:4px 8px; border-radius:999px; border:1px solid #FFD9C7; }
+  /* 짧은 **고정** 라벨은 쪼개지지 않게 한다. 사용자 값이 들어오는 자리(`.badge`·`.chip`·`.fbtn`)에는
+     절대 걸지 않는다 — 거기서는 쪼개지는 게 아니라 줄어드는 게 맞다. */
+  .sharebtn, .satbtn, .sortbtn, .eb-btn, .ub-undo { white-space:nowrap; }
+  .sharebtn { flex-shrink:0; }
+  .sharebtn + .sharebtn { margin-left:0; }
   .sharebtn.plain { margin-left:4px; }
 
   .pin { width:30px; height:30px; border-radius:50% 50% 50% 0; transform:rotate(-45deg); display:flex; align-items:center; justify-content:center; box-shadow:0 2px 6px rgba(0,0,0,0.3); border:2px solid #fff; cursor:pointer; }
@@ -205,7 +223,7 @@
       <button class="sharebtn plain" id="share-btn" type="button" aria-label="목록을 파일로 공유">🔗 목록 공유</button>
     </div>
     <h1 class="display">아기랑 갈 곳</h1>
-    <p class="sub">다른 데서 본 곳, 링크만 붙여넣으면 저장돼요</p>
+    <p class="sub">애기야가자·맘카페·인스타에서 발견한 곳을 모아두는 지도 메모장</p>
   </div>
 
   <div id="example-banner"></div>
@@ -408,11 +426,14 @@ function deleteCustomType(key){
   persistTypes();
   renderAll();
 }
+/* 방문후기에 **순서**를 준다. 회장 지시의 핵심은 「최고~보통까지 보기」 —
+   단일 선택이 아니라 **기준선(이상) 필터**다(B-4, 2026-09-26). */
 const SATISFACTIONS = [
-  { key:"최고", emoji:"😍", color:"#3AAFA9" },
-  { key:"무난", emoji:"🙂", color:"#B98B4E" },
-  { key:"별로", emoji:"😕", color:"#8C8378" },
+  { key:"최고", emoji:"😍", color:"#3AAFA9", rank:3 },
+  { key:"무난", emoji:"🙂", color:"#B98B4E", rank:2 },
+  { key:"별로", emoji:"😕", color:"#8C8378", rank:1 },
 ];
+const satRank = key => (SATISFACTIONS.find(s => s.key === key) || {}).rank || 0;
 
 /* 육아 전용 구조화 필드 — 상품 컨셉이 차별점으로 내건 것들이다.
    문서에만 있고 코드에는 없던 상태를 2026-09-18 QA가 잡았다. 기저귀대·수유실도
@@ -480,6 +501,7 @@ let draft = null;
 let rawInput = "";
 let filterType = "전체";
 let favOnly = false;
+let minRating = 0;   // 0 = 전체 · 1~3 = 그 등급 **이상**만
 let listQuery = "";
 let sortMode = "recent"; // "recent" | "name" | "distance"
 let groupByRegion = false;
@@ -863,9 +885,13 @@ function renderFootnote(){
   // 저장 위치는 지도 상태와 무관하게 늘 같으므로 항상 같이 알린다.
   // (예전에는 지도가 안 뜨면 그 안내만 나가면서 "공유는 그대로 됩니다"라고 잘못 알렸다.)
   const el = document.getElementById("footnote");
-  const storage = "기록은 이 기기에만 저장돼요.";
+  // 「이 기기에만」이 무슨 뜻인지까지 말한다 — 기기를 바꾸면 기록이 사라진다(B-5 a, 회장 지시).
+  const storage = "기록은 이 기기에만 저장돼요 — 다른 기기로 옮기려면 💾 내보내기로 파일을 뺀 뒤 📂 가져오기로 넣으세요.";
   if(!mapReady){
     el.textContent = `지금은 카카오맵 키가 등록되지 않아 지도와 상호명 검색을 쓸 수 없어요. 등록·분류·메모·즐겨찾기는 그대로 됩니다. ${storage}`;
+  } else if(searchUsable === false){
+    // 지도는 떴지만 검색은 거절당했다. "지도가 뜬다 = 검색이 된다"로 읽히지 않게 정확히 적는다.
+    el.textContent = `지도는 보이지만 지금 방식으로는 상호명 검색을 쓸 수 없어요. 파일을 직접 열면(file://) 카카오가 검색을 막습니다 — 주소로 열면 됩니다. 링크 붙여넣기·직접 입력·지도에서 위치 찍기는 그대로 됩니다. ${storage}`;
   } else {
     el.textContent = `${storage} 지도에 핀이 없는 장소는 카드를 탭하면 위치를 지정할 수 있어요.`;
   }
@@ -986,6 +1012,8 @@ function visiblePlaces(){
   return places
     .filter(p => filterType==="전체" ? true : (p.types||[]).includes(filterType))
     .filter(p => favOnly ? p.favorite : true)
+    // 기준선 이상만. 후기를 아직 안 남긴 곳은 "그 이상"에 들지 않으므로 빠진다.
+    .filter(p => minRating === 0 ? true : satRank(p.satisfaction) >= minRating)
     .filter(p => matchesQuery(p, listQuery));
 }
 function hasLoc(p){ return Number.isFinite(p.lat) && Number.isFinite(p.lng); }
@@ -1064,12 +1092,15 @@ function renderAdd(){
   const el = document.getElementById("addwrap");
   if(draft){ renderDraftForm(el); return; }
   clearDraftPreview();
-  if(mapReady && addMode === "search"){ renderSearchBox(el); return; }
+  if(mapReady && searchUsable !== false && addMode === "search"){ renderSearchBox(el); return; }
   renderManualBox(el);
 }
 
 function renderManualBox(el){
+  // 「링크만 붙여넣으면 저장돼요」를 **입력칸 바로 위**에 둔다(B-5 b, 회장 지시).
+  // 맨 위 제목 아래에 있던 것은 붙여넣는 자리와 멀어 읽히지 않았다.
   el.innerHTML = `
+    <p class="addhint">다른 데서 본 곳, 링크만 붙여넣으면 저장돼요</p>
     <div class="quickadd">
       <input id="raw-input" aria-label="링크·주소·상호명 붙여넣기" placeholder="링크, 주소, 상호명 붙여넣기" value="${esc(rawInput)}" />
       <button id="start-btn" type="button" aria-label="등록 시작">＋</button>
@@ -1085,7 +1116,10 @@ function renderManualBox(el){
 }
 
 function renderSearchBox(el){
+  // 「링크만 붙여넣으면 저장돼요」를 **입력칸 바로 위**에 둔다(B-5 b, 회장 지시).
+  // 맨 위 제목 아래에 있던 것은 붙여넣는 자리와 멀어 읽히지 않았다.
   el.innerHTML = `
+    <p class="addhint">다른 데서 본 곳, 링크만 붙여넣으면 저장돼요</p>
     <div class="quickadd">
       <input id="search-input" aria-label="상호명으로 검색" placeholder="상호명으로 검색 (예: OO키즈카페)" value="${esc(searchQuery)}" />
       <button id="search-btn" type="button" aria-label="검색">🔍</button>
@@ -1110,6 +1144,8 @@ function renderSearchResults(){
         <span>${esc(r.road_address_name || r.address_name || "")}</span>
       </div>`).join("");
     el.querySelectorAll(".searchitem").forEach(item => item.addEventListener("click", () => pickSearchResult(searchResults[Number(item.dataset.i)])));
+  } else if(searchUsable === false){
+    el.innerHTML = `<div class="searchempty">지금 방식으로는 상호명 검색을 쓸 수 없어요. 직접 입력하거나 링크를 붙여넣어주세요.</div>`;
   } else if(searchDone && searchQuery.trim()){
     el.innerHTML = `<div class="searchempty">검색 결과가 없어요. 직접 입력해보세요.</div>`;
   } else {
@@ -1124,8 +1160,38 @@ function onSearchInput(v){
   searchDebounceTimer = setTimeout(() => runSearch(v.trim()), 350);
 }
 
+/* 지도가 떴다고 상호명 검색이 되는 것은 아니다.
+   지도 타일은 리퍼러 없이도 오지만, 상호명 검색(services)은 **카카오 콘솔에 등록된 도메인**에서만
+   동작한다. 파일을 직접 열면(`file://`) 카카오가 401 `domain mismatched`로 거절한다 —
+   그런데 화면에는 지도가 보이니 사용자는 앱이 고장 난 줄 안다(회장 피드백 B-2, 2026-09-26).
+
+   `mapReady`로 판단하면 **안내문이 거짓말을 한다.** 그래서 한 번 실제로 물어보고 그 답으로 적는다. */
+let searchUsable = null;   // null = 아직 모른다 · true/false = 물어본 결과
+
+function probeSearchability(){
+  if(!placesService) return;
+  try {
+    placesService.keywordSearch("카페", (data, status) => {
+      const S = kakao.maps.services.Status;
+      // 결과가 0건인 것과 거절당한 것은 다르다. 0건은 검색이 **된** 것이다.
+      searchUsable = (status === S.OK || status === S.ZERO_RESULT);
+      renderFootnote();
+      renderAdd();
+    });
+  } catch(e){
+    searchUsable = false;
+    renderFootnote();
+    renderAdd();
+  }
+}
+
 function runSearch(query){
   if(!query || !placesService) return;
+  if(searchUsable === false){
+    searchDone = true; searchResults = [];
+    renderSearchResults();
+    return;
+  }
   const opts = mapReady ? { location: map.getCenter() } : {};
   placesService.keywordSearch(query, (data, status) => {
     searchDone = true;
@@ -1407,8 +1473,16 @@ function renderSortRow(){
     { key:"name", label:"이름순" },
     { key:"distance", label:"집에서 가까운순" },
   ];
+  // 방문후기 기준선. **구분값 칩 줄에 섞지 않는다** — 그 줄이 길어지면 B-3에서 줄인 게 무의미해진다.
+  const ratingBtns = [
+    { rank:0, label:"후기 전체" },
+    { rank:3, label:"😍 최고만" },
+    { rank:2, label:"🙂 무난 이상" },
+    { rank:1, label:"😕 별로 이상" },
+  ].map(r => `<button class="sortbtn ratebtn ${minRating===r.rank?'active':''}" type="button" data-rank="${r.rank}" aria-pressed="${minRating===r.rank}">${r.label}</button>`).join("");
   el.innerHTML = modes.map(m => `<button class="sortbtn ${sortMode===m.key?'active':''}" data-s="${m.key}">${m.label}${m.key==='distance' && !HOME ? ' 📍' : ''}</button>`).join("")
-    + `<button class="sortbtn groupbtn ${groupByRegion?'active':''}" id="group-toggle">🗺️ 지역별로 묶기</button>`;
+    + `<button class="sortbtn groupbtn ${groupByRegion?'active':''}" id="group-toggle">🗺️ 지역별로 묶기</button>`
+    + `<span class="sortsep" aria-hidden="true"></span>` + ratingBtns;
   el.querySelectorAll(".sortbtn[data-s]").forEach(b => b.addEventListener("click", () => {
     const mode = b.dataset.s;
     if(mode === "distance"){
@@ -1423,6 +1497,10 @@ function renderSortRow(){
     sortMode = mode; renderSortRow(); renderList();
   }));
   document.getElementById("group-toggle").addEventListener("click", () => { groupByRegion = !groupByRegion; renderSortRow(); renderList(); });
+  el.querySelectorAll(".ratebtn").forEach(b => b.addEventListener("click", () => {
+    minRating = Number(b.dataset.rank);
+    renderSortRow(); renderList(); renderMarkers();
+  }));
 }
 
 function editChipRowHtml(id, activeTypes){
@@ -1462,6 +1540,15 @@ function babyBadgesHtml(p){
   return age + amen;
 }
 
+/* 카드 3줄 — 회장이 배치를 직접 지정했다(B-3, 2026-09-26).
+     1줄: 장소명 — 링크표시 — 즐겨찾기
+     2줄: 장소 성격(구분값·연령·편의시설) — 방문후기(최고/무난/별로)
+     3줄: 메모 — 삭제(우측 끝)
+   예전에는 배지줄·이름·주소·메모·만족도줄·삭제줄로 **최대 6줄**이었고, 만족도와 삭제가 각각
+   한 줄을 통째로 먹었다. 목록을 쭉 훑는 앱이라 그게 제일 컸다.
+
+   ⚠️ **기능을 빼지 않았다.** 만족도 3단 선택·삭제 2단 확인·위치 미지정 표시 전부 그대로다.
+   작게 만든 것이지 없앤 게 아니다. 주소는 회장 배치에 줄이 없어 **메모 줄에 접어 넣었다.**  */
 function placeCardHtml(p){
   if(p.id === editingId && editBuffer) return placeEditCardHtml(p, editBuffer);
   const located = hasLoc(p);
@@ -1471,32 +1558,40 @@ function placeCardHtml(p){
     const ti = allTypes().find(t=>t.key===tk) || DEFAULT_TYPE_INFO;
     return `<span class="badge" style="background:${esc(ti.color)};color:${esc(textOn(ti.color))}">${esc(tk)}</span>`;
   }).join("");
+  // 주소와 메모를 한 줄에 합친다. 둘 다 없으면 3줄은 아예 그리지 않는다.
+  const subText = [p.address, p.memo].filter(Boolean).map(t => esc(t)).join(" · ");
   return `
     <div class="pcard" data-id="${esc(p.id)}" data-act="card">
-      <div class="pcard-top">
-        <div>
-          <div class="pcard-meta">
-            ${badges}
-            ${sourceIcon ? `<span style="font-size:10px;color:#655E56;">${sourceIcon}</span>` : ""}
-            ${stillClassifying ? `<span class="autotag">🔎 분류중…</span>` : ""}
-            ${!located ? `<span class="noloc">📍 위치 미지정 · 탭해서 설정</span>` : ""}
-            ${babyBadgesHtml(p)}
-          </div>
-          <div class="pname">${esc(p.name)}</div>
-          ${p.address ? `<div class="paddr">${esc(p.address)}</div>` : ""}
-          ${p.memo ? `<div class="pmemo">${esc(p.memo)}</div>` : ""}
-        </div>
+      <div class="pcard-l1">
+        <div class="pname">${esc(p.name)}</div>
+        ${sourceIcon ? `<span class="psrc">${sourceIcon}</span>` : ""}
+        ${stillClassifying ? `<span class="autotag">🔎 분류중</span>` : ""}
         <button class="starbtn" type="button" data-act="fav" data-id="${esc(p.id)}" aria-pressed="${!!p.favorite}" aria-label="즐겨찾기">${p.favorite ? "⭐" : "☆"}</button>
       </div>
-      <div class="satrow">${SATISFACTIONS.map(s => `<button class="satbtn ${p.satisfaction===s.key?'active':''}" style="${p.satisfaction===s.key?`background:${esc(s.color)};color:${esc(textOn(s.color))};border-color:${esc(s.color)};`:''}" data-act="sat" data-id="${esc(p.id)}" data-key="${esc(s.key)}">${s.emoji} ${s.key}</button>`).join("")}</div>
-      <div class="delrow"><button class="delbtn ${pendingDeleteId===p.id?'confirm':''}" data-act="del" data-id="${esc(p.id)}">${pendingDeleteId===p.id ? "정말 삭제할까요? 다시 탭" : "삭제"}</button></div>
+      <div class="pcard-l2">
+        <div class="pcard-tags">
+          ${badges}
+          ${babyBadgesHtml(p)}
+          ${!located ? `<span class="noloc">📍 위치 미지정 · 탭해서 설정</span>` : ""}
+        </div>
+        <div class="satrow">${SATISFACTIONS.map(s => `<button class="satbtn ${p.satisfaction===s.key?'active':''}" style="${p.satisfaction===s.key?`background:${esc(s.color)};color:${esc(textOn(s.color))};border-color:${esc(s.color)};`:''}" data-act="sat" data-id="${esc(p.id)}" data-key="${esc(s.key)}" title="${esc(s.key)}" aria-label="방문후기 ${esc(s.key)}">${s.emoji} ${esc(s.key)}</button>`).join("")}</div>
+      </div>
+      <div class="pcard-l3">
+        <div class="pmemo">${subText}</div>
+        <button class="delbtn ${pendingDeleteId===p.id?'confirm':''}" type="button" data-act="del" data-id="${esc(p.id)}" aria-label="삭제">${pendingDeleteId===p.id ? "정말?" : "삭제"}</button>
+      </div>
     </div>`;
 }
 
 function renderList(){
   const el = document.getElementById("list");
   const visible = sortPlaces(visiblePlaces());
-  if(visible.length===0){ el.innerHTML = `<div class="empty">${listQuery.trim() ? "검색 결과가 없어요." : "등록된 장소가 없어요."}</div>`; return; }
+  if(visible.length===0){
+    // 필터 때문에 비었는데 "등록된 장소가 없어요"라고 하면 기록이 사라진 줄 안다.
+    const filtered = listQuery.trim() || favOnly || minRating > 0 || filterType !== "전체";
+    el.innerHTML = `<div class="empty">${filtered ? "조건에 맞는 장소가 없어요. 필터를 풀어보세요." : "등록된 장소가 없어요."}</div>`;
+    return;
+  }
   if(groupByRegion){
     el.innerHTML = groupByRegionMap(visible).map(({region, items}) => `
       <div class="region-header">${esc(region)} <span class="region-count">${items.length}</span></div>
@@ -1560,6 +1655,7 @@ function initMap(){
   map = new kakao.maps.Map(document.getElementById("map"), { center: new kakao.maps.LatLng(center.lat, center.lng), level: 6 });
   placesService = new kakao.maps.services.Places();
   mapReady = true;
+  probeSearchability();
   renderFootnote();
   renderMarkers();
   if(!draft && !rawInput.trim()){ renderAdd(); }
