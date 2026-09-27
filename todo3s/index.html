@@ -8,7 +8,7 @@
      2026-09-27 테스트용 배포(회장 상시 승인). 검색엔진에 잡히면 안 된다.
      테스트가 끝나면 이 폴더와 robots.txt 항목을 같이 내린다. -->
 <meta name="robots" content="noindex, nofollow" />
-<meta name="description" content="여러 리스트·우선순위·알림·실시간 공유를 갖춘 초단순 할 일 메모 앱. 앱을 열면 바로 타이핑할 수 있다." />
+<meta name="description" content="여러 리스트·우선순위·알림·공유를 갖춘 초단순 할 일 메모 앱. 앱을 열면 바로 타이핑할 수 있다." />
 <link rel="manifest" href="manifest.json" />
 <link rel="icon" href="icons/icon-192.png" />
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
@@ -28,6 +28,17 @@
   html, body { height:100%; margin:0; }
   body { background:#EDEDE6; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; display:flex; justify-content:center; overflow:hidden; }
   .display { font-family:'Gowun Dodum', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; }
+  /* ---------- 좁은 폭에서 글자가 깨지는 것을 한자리에서 막는다 (2026-09-25) ----------
+   * 두 가지가 **같이** 걸려야 한다. 한쪽만 걸면 다른 쪽이 터진다 —
+   * 다른 두 앱이 정확히 그렇게 반려됐다.
+   *   word-break: keep-all  — 한글은 기본값이 음절 단위 아무 데서나 개행이라
+   *     "공유드리기"가 `공유드리` / `기` 로 반토막 난다(390px에서 실측).
+   *   overflow-wrap: anywhere — keep-all만 걸면 공백 없는 긴 글자열(붙여 쓴 한글·붙여넣은
+   *     URL)이 상자를 넘고, `.app{overflow:hidden}`에 **잘려서 아예 안 보인다**
+   *     (320px에서 240px 넘침 실측). 안 보이는 쪽이 읽기 불편한 쪽보다 나쁘다.
+   * 둘 다 상속되는 속성이라 여기 한 번 걸면 **모든 보간 지점**이 덮인다 —
+   * 자리마다 찾아 붙이면 이번에도 한 자리가 빠진다. */
+  .app, #modal-root { word-break:keep-all; overflow-wrap:anywhere; }
   .app { width:100%; max-width:420px; height:100vh; height:100dvh; background:#FAF9F5; box-shadow:0 0 40px rgba(0,0,0,0.06); display:flex; flex-direction:column; overflow:hidden; }
   .header { padding:12px 20px 10px; flex-shrink:0; }
   .header-top { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
@@ -57,6 +68,10 @@
   /* 알림이 꺼져 있는데 리마인더가 걸려 있을 때의 안내. 색은 #FAF9F5 배경에서 5.38:1(AA 통과). */
   /* 저장 실패 안내. 지나칠 수 없게 눈에 띄되 배치를 밀지 않도록 한 줄로 둔다.
      색은 #FDECE6 위에서 5.9:1(AA 통과). */
+  /* 복구 안내. 저장 실패 배너와 같은 모양을 쓴다 — 자리마다 다른 모양을 만들지 않는다. */
+  .load-failed { margin:0 20px 8px; padding:10px 12px; border-radius:10px; background:#FBF3DC; color:#7A5610; font-size:12px; line-height:1.5; }
+  .load-failed .lf-sub { color:#8A6A22; }
+  .load-failed .lf-close { display:block; margin-top:8px; border:1px solid #E2CE9A; background:#fff; color:#7A5610; border-radius:8px; padding:6px 14px; font-size:12px; min-height:44px; cursor:pointer; white-space:nowrap; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; }
   .save-failed { margin:0 20px 8px; padding:10px 12px; border-radius:10px; background:#FDECE6; color:#8C3A16; font-size:12px; line-height:1.5; }
   .notif-blocked { margin:8px 20px 0; font-size:12px; line-height:1.5; color:#A64D22; }
   .item-text { font-size:14px; line-height:1.6; color:#2B2E35; white-space:pre-line; flex:1; min-width:0; cursor:pointer; }
@@ -80,7 +95,10 @@
   .send-btn { width:44px; height:44px; border-radius:999px; border:none; display:flex; align-items:center; justify-content:center; background:#E7E4DC; color:#646058; cursor:pointer; flex-shrink:0; }
   .send-btn.active { background:#4D7763; color:#fff; }
   .tabbar { display:flex; min-width:0; border-top:1px solid #EEEDE5; flex-shrink:0; }
-  .tab-btn { flex:1; padding:14px 0; min-height:48px; text-align:center; font-size:14px; font-weight:500; background:none; border:none; cursor:pointer; color:#73736C; }
+  /* 짧은 고정 라벨은 두 줄로 깨지지 않게 한 줄로 못 박는다(총괄 2026-09-26 규칙 11 보강).
+   * `overflow-wrap:anywhere`가 상속되는 자리라 라벨이 길어지면 깨질 수 있는데, 탭 이름과
+   * 줄 끝 버튼은 길어질 일이 없는 고정 문구다. 줄이 늘어나면 탭바 높이가 통째로 밀린다. */
+  .tab-btn { flex:1; padding:14px 0; min-height:48px; text-align:center; font-size:14px; font-weight:500; background:none; border:none; cursor:pointer; color:#73736C; white-space:nowrap; }
   .tab-btn.active { color:#4D7763; }
   .badge { font-size:10px; margin-left:2px; }
   .modal-backdrop { display:none; position:fixed; inset:0; z-index:60; background:rgba(43,46,53,0.45); align-items:center; justify-content:center; padding:20px; }
@@ -99,8 +117,11 @@
   .field-label { font-size:12px; font-weight:500; color:#5B5A52; margin:14px 20px 6px; }
   .field-input { display:block; width:calc(100% - 40px); margin:0 20px; border:1px solid #E7E4DC; border-radius:10px; padding:10px 12px; font-size:14px; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; background:#fff; color:#2B2E35; }
   .field-row { display:flex; gap:8px; margin:0 20px; align-items:center; }
-  .field-row .field-input { margin:0; flex:1; }
-  .field-row button { flex-shrink:0; border:none; border-radius:10px; padding:10px 14px; font-size:13px; background:#4D7763; color:#fff; cursor:pointer; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; }
+  /* min-width:0 이 없으면 flex 항목은 제 내용보다 작아지지 않는다. `datetime-local`은
+   * 내재 폭이 커서 320px에서 알림 줄이 20px 넘쳤다(실측). keep-all만 걸고 이걸 빠뜨리는
+   * 것이 옆 앱이 반려된 그 자리다. */
+  .field-row .field-input { margin:0; flex:1; min-width:0; }
+  .field-row button { flex-shrink:0; white-space:nowrap; border:none; border-radius:10px; padding:10px 14px; font-size:13px; background:#4D7763; color:#fff; cursor:pointer; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; }
   .list-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 20px; cursor:pointer; }
   .list-row:hover { background:#F4F2EA; }
   .list-row.current .lr-name { color:#4D7763; font-weight:700; }
@@ -156,6 +177,10 @@
 const WORKER_BASE = "https://todo3s.glowhalo.org";
 const SYNC_DEBOUNCE_MS = 1200;
 const SYNC_POLL_MS = 20000;
+/* 화면 문구에 쓰는 초 단위. **숫자를 문구에 베끼지 않는다** — 주기를 바꾸면 안내가 거짓이 된다.
+ * 2026-09-27 총괄 실측: 「실시간」이라고 적어 뒀는데 상대 화면 반영까지 최대 20초였다.
+ * 두 기기를 나란히 놓고 보는 사람은 그 20초를 "고장"으로 읽는다. */
+const SYNC_POLL_SEC = Math.round(SYNC_POLL_MS / 1000);
 const REMINDER_CHECK_MS = 30000;
 // 검색창은 항목이 이만큼 쌓였을 때만 나타난다. 적을 때는 눈으로 훑는 게 더 빠르고,
 // 상시 노출은 "열면 바로 입력"이라는 첫 화면의 초점을 흐린다.
@@ -247,9 +272,19 @@ function formatRemind(ts){
 function seedDemoItems(){
   return [];
 }
+/* id는 화면에서 **속성 안**에 들어간다(`onclick="complete('...')"` 등 12자리).
+ * `uid()`가 만드는 것은 영숫자뿐인데, **공유방에서 받은 데이터도 이 함수를 지난다**
+ * (방 코드를 아는 사람은 누구나 쓸 수 있다 — 설계상 그렇다). 2026-09-27 실측:
+ * `id`를 `x" onmouseover="..."`로 두면 속성을 빠져나가 **요소 3개에 심기고 실제로 실행됐다**.
+ * 그래서 **경계에서** 모양을 검사해 아니면 새로 발급한다. 정상 `uid()`는 그대로 통과하므로
+ * 공유 중인 항목이 서로 어긋나지 않는다. 출력 쪽 이스케이프는 그것과 **별도로** 건다 —
+ * 하나만 하면 다음에 새로 생기는 자리가 다시 뚫린다. */
+const SAFE_ID = /^[A-Za-z0-9_-]{1,64}$/;
+function safeId(v){ return (typeof v === "string" && SAFE_ID.test(v)) ? v : uid(); }
+
 function normalizeItem(i){
   return {
-    id: i.id != null ? i.id : uid(),
+    id: safeId(i.id),
     text: String(i.text || ""),
     completedAt: typeof i.completedAt === "number" ? i.completedAt : null,
     createdAt: typeof i.createdAt === "number" ? i.createdAt : Date.now(),
@@ -258,14 +293,30 @@ function normalizeItem(i){
     notified: !!i.notified,
   };
 }
+/* 저장된 것을 못 읽어 빈 상태로 되돌린 사실. **조용히 초기화하는 것이 가장 나쁘다** —
+ * 사용자 눈에는 "내 할 일이 통째로 날아간" 것이고 왜인지도, 어떻게 되살리는지도 알 수 없다
+ * (2026-09-27 총괄 실측 T-1: 화면에는 아무 안내가 없고 콘솔에만 찍혔다. 세 앱 공통 결함).
+ * `null`이면 정상 기동이다. 되돌린 경우에만 `{ reason }`이 담긴다. */
+let loadFailed = null;
+// 읽지 못한 원본을 지우지 말고 옮겨 두는 자리. 첫 저장이 이 값을 덮어쓰기 전에 떠 놓는다.
+const BROKEN_KEY = STORAGE_KEY + "_broken";
+
+/* 못 읽은 원본을 따로 보관한다. 이것까지 실패해도(공간 부족 등) 기동은 막지 않는다 —
+ * 보관은 최선 노력이고, 사용자에게 말하는 것이 본체다. */
+function keepBrokenRaw(raw){
+  try { localStorage.setItem(BROKEN_KEY, raw); return true; }
+  catch(e) { console.error("깨진 원본 보관 실패", e); return false; }
+}
+
 function loadStore(){
+  let raw = null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.lists) && parsed.lists.length > 0) {
         parsed.lists = parsed.lists.map(l => ({
-          id: l.id != null ? l.id : uid(),
+          id: safeId(l.id),
           name: l.name || "리스트",
           items: Array.isArray(l.items) ? l.items.map(normalizeItem) : [],
           share: l.share && l.share.code ? { code: l.share.code, version: l.share.version || 1, updatedAt: l.share.updatedAt || Date.now() } : null,
@@ -274,12 +325,23 @@ function loadStore(){
         return parsed;
       }
     }
-  } catch(e) { console.error("불러오기 실패", e); }
+  } catch(e) {
+    console.error("불러오기 실패", e);
+    // JSON 자체가 깨진 갈래
+    loadFailed = { reason: "broken", kept: raw ? keepBrokenRaw(raw) : false };
+  }
+
+  /* ⚠️ 되돌아오는 길이 **둘**이다. 위의 catch(=JSON이 깨짐)와, 예외 없이 if 사슬을 빠져나오는
+   * 길(=JSON은 맞지만 lists가 배열이 아니거나 비었음)이다. 안내를 catch에만 달면
+   * 두 번째 길은 그대로 조용히 초기화된다 — 이 저장소가 반복해 당한 "한 자리만 빠짐"이다. */
+  if (!loadFailed && raw) loadFailed = { reason: "shape", kept: keepBrokenRaw(raw) };
 
   // 첫 실행 — 저장된 것이 없거나 읽다가 깨졌을 때
   const list = { id: uid(), name: "기본 리스트", items: seedDemoItems(), share: null };
   return { lists: [list], currentListId: list.id };
 }
+// 사용자가 읽고 닫는다. 닫기 전까지는 다시 그려도 남아 있어야 한다.
+function dismissLoadNotice(){ loadFailed = null; render(); }
 /**
  * 저장에 실패했는가. 저장소가 가득 차면 `setItem`이 던지는데, 예전에는 그걸 삼켜서
  * **화면에는 항목이 보이는데 새로고침하면 없는** 상태가 됐다. 사용자는 적은 것을
@@ -336,6 +398,11 @@ let joinError = "";
 let remindError = "";
 let searchQuery = "";      // 현재 탭의 목록 필터(비어 있으면 필터 없음)
 let detailDraft = "";      // 상세 모달에서 편집 중인 항목 텍스트
+/* 입력창에 치다 만 글자. **DOM이 아니라 여기에 둔다** — 완료 탭에는 입력창이 아예 없어서
+ * 다시 그릴 때 집어 올 자리가 없었고, 완료 탭에 갔다 오면 치던 할 일이 말없이 사라졌다
+ * (2026-09-25 실측: 다시 그리기 여섯 경로 중 이 한 자리만 뚫려 있었다). 캡처 우선 앱에서
+ * 제일 비싼 손해라 `detailDraft`와 같은 방식으로 붙잡는다. */
+let inputDraft = "";
 let detailError = "";
 let importError = "";
 
@@ -349,6 +416,7 @@ const pendingPush = {};     // listId -> bool (아직 서버에 반영 안 된 �
  * 아무것도 가지 않았다. 사용자는 동기화되고 있다고 믿는다(2026-09-13 총괄 지시 큐 2).
  */
 const syncFailed = {};
+const lastSyncAt = {};   // listId -> 서버와 마지막으로 맞춘 시각(ms). 헤더에 "n초 전"으로 보여준다
 let notifPermissionAsked = false;
 
 function getCurrentList(){
@@ -383,6 +451,7 @@ function addItem(){
     list.items.push({ id: uid(), text, completedAt: null, createdAt: Date.now(), priority: false, remindAt: null, notified: false });
   });
   el.value = "";
+  inputDraft = "";        // 들어간 뒤에도 붙잡고 있으면 다음 그리기에서 되살아난다
   render();
   const list = findList(listId);
   if (list) markDirtyAndSync(list);
@@ -797,7 +866,7 @@ async function joinRoomByCode(codeArg){
   }
 }
 
-/* ---------- 공유(실시간 동기화) ---------- */
+/* ---------- 공유(폴링 동기화 — 최대 SYNC_POLL_SEC초) ---------- */
 
 function openListSettings(){
   shareBusy = false; shareError = "";
@@ -946,8 +1015,18 @@ function headerSubText(){
   const list = getCurrentList();
   if (tab !== "list") return `완료 ${list.items.filter(i=>i.completedAt).length}개`;
   const active = list.items.filter(i=>!i.completedAt).length;
-  const share = !list.share ? ""
-    : (syncFailed[list.id] ? " · ⚠ 동기화 안 됨(다시 시도 중)" : " · 🔗 공유 중");
+  /* 공유는 폴링이라 상대 변경이 최대 SYNC_POLL_SEC초 뒤에 온다. 그 동안 화면이 아무 말도
+   * 안 하면 사용자는 자기가 뭘 잘못한 줄 안다 — 마지막으로 맞춘 시점을 그대로 보여준다. */
+  let share = "";
+  if (list.share) {
+    if (syncFailed[list.id]) share = " · ⚠ 동기화 안 됨(다시 시도 중)";
+    else {
+      const at = lastSyncAt[list.id];
+      const ago = at ? Math.max(0, Math.round((Date.now() - at) / 1000)) : null;
+      share = ago === null ? " · 🔗 공유 중(맞추는 중…)"
+        : ` · 🔗 공유 중 · ${ago}초 전에 맞췄어요`;
+    }
+  }
   return `할 일 ${active}개${share}`;
 }
 
@@ -961,7 +1040,8 @@ function markSyncFailed(listId){
   paintHeaderSub();
 }
 function markSyncOk(listId){
-  if (!syncFailed[listId]) return;
+  lastSyncAt[listId] = Date.now();
+  if (!syncFailed[listId]) { paintHeaderSub(); return; }
   syncFailed[listId] = false;
   paintHeaderSub();
 }
@@ -1170,24 +1250,24 @@ function checkReminders(){
 /* ---------- 렌더 ---------- */
 
 function renderItemCard(item, isDone){
-  const star = !isDone ? `<button class="star-btn ${item.priority?'on':''}" onclick="event.stopPropagation();togglePriority('${item.id}')" title="우선순위" aria-pressed="${item.priority?'true':'false'}" aria-label="우선순위: ${escapeHtml(item.text)}">${item.priority?'★':'☆'}</button>` : "";
+  const star = !isDone ? `<button class="star-btn ${item.priority?'on':''}" onclick="event.stopPropagation();togglePriority('${escapeHtml(item.id)}')" title="우선순위" aria-pressed="${item.priority?'true':'false'}" aria-label="우선순위: ${escapeHtml(item.text)}">${item.priority?'★':'☆'}</button>` : "";
   const remindChip = item.remindAt ? `<span class="remind-chip">⏰ ${formatRemind(item.remindAt)}${item.notified ? " · 알림됨" : ""}</span>` : "";
   const meta = (!isDone && remindChip) ? `<div class="item-meta">${remindChip}</div>` : "";
   if (isDone) {
     return `
       <div class="item-card done">
-        <button class="checkbox checked" onclick="restore('${item.id}')" aria-label="완료 취소: ${escapeHtml(item.text)}">✓</button>
+        <button class="checkbox checked" onclick="restore('${escapeHtml(item.id)}')" aria-label="완료 취소: ${escapeHtml(item.text)}">✓</button>
         <div style="flex:1;">
           <div class="item-text done">${escapeHtml(item.text)}</div>
         </div>
-        <button class="trash-btn" onclick="askRemoveItem('${item.id}','done')" aria-label="삭제: ${escapeHtml(item.text)}">✕</button>
+        <button class="trash-btn" onclick="askRemoveItem('${escapeHtml(item.id)}','done')" aria-label="삭제: ${escapeHtml(item.text)}">✕</button>
       </div>`;
   }
   return `
     <div class="item-card ${item.priority?'priority':''}">
-      <button class="checkbox" onclick="complete('${item.id}')" aria-label="완료로 표시: ${escapeHtml(item.text)}"></button>
+      <button class="checkbox" onclick="complete('${escapeHtml(item.id)}')" aria-label="완료로 표시: ${escapeHtml(item.text)}"></button>
       <div style="flex:1;">
-        <div class="item-text" role="button" tabindex="0" onclick="openDetail('${item.id}')" onkeydown="activateOnKey(event, () => openDetail('${item.id}'))" aria-label="자세히 보기: ${escapeHtml(item.text)}">${escapeHtml(item.text)}</div>
+        <div class="item-text" role="button" tabindex="0" onclick="openDetail('${escapeHtml(item.id)}')" onkeydown="activateOnKey(event, () => openDetail('${escapeHtml(item.id)}'))" aria-label="자세히 보기: ${escapeHtml(item.text)}">${escapeHtml(item.text)}</div>
         ${meta}
       </div>
       ${star}
@@ -1279,6 +1359,7 @@ function render(){
       <p>${headerSub}</p>
     </div>
     ${saveFailed ? `<div class="save-failed" role="alert">저장 공간이 가득 차서 <b>방금 적은 것이 저장되지 않았어요.</b> 완료한 항목을 지우거나, 설정에서 백업을 내보낸 뒤 정리해주세요.</div>` : ""}
+    ${loadFailed ? `<div class="load-failed" role="alert">저장해 둔 할 일을 <b>읽지 못했어요.</b> 빈 목록으로 시작했어요.<br>내보내 둔 백업 파일이 있으면 <b>설정 → 가져오기</b>로 되살릴 수 있어요.${loadFailed.kept ? `<br><span class="lf-sub">읽지 못한 원본은 지우지 않고 따로 보관했어요.</span>` : ""}<button class="lf-close" onclick="dismissLoadNotice()" aria-label="안내 닫기">확인</button></div>` : ""}
     <div class="content">${contentHtml}</div>
     ${tab==="list" ? `
       <div class="input-bar">
@@ -1297,14 +1378,20 @@ function render(){
     const inputEl = document.getElementById("todo-input");
     const sendBtn = document.getElementById("send-btn");
     inputEl.addEventListener("input", () => {
+      inputDraft = inputEl.value;
       sendBtn.classList.toggle("active", inputEl.value.trim().length>0);
     });
-    if (preserved && preserved.value) {
-      inputEl.value = preserved.value;
-      sendBtn.classList.toggle("active", preserved.value.trim().length>0);
-      if (preserved.focused) {
+    // 같은 화면에서 다시 그린 것이면 커서 자리까지 돌려놓고, 완료 탭처럼 입력창이
+    // 없던 화면에서 돌아온 것이면 붙잡아 둔 글자만 돌려놓는다(커서는 되돌릴 자리가 없다).
+    const restore = (preserved && preserved.value) ? preserved
+      : (inputDraft ? { value: inputDraft, focused: false } : null);
+    if (restore) {
+      inputEl.value = restore.value;
+      inputDraft = restore.value;
+      sendBtn.classList.toggle("active", restore.value.trim().length>0);
+      if (restore.focused) {
         inputEl.focus();
-        try { inputEl.setSelectionRange(preserved.start, preserved.end); } catch(e) { /* 브라우저가 막으면 그냥 끝으로 */ }
+        try { inputEl.setSelectionRange(restore.start, restore.end); } catch(e) { /* 브라우저가 막으면 그냥 끝으로 */ }
       }
     }
   }
@@ -1340,7 +1427,7 @@ function renderModal(){
 
   if (modal.type === "switcher") {
     const rows = store.lists.map(l => `
-      <div class="list-row ${l.id===store.currentListId?'current':''}" role="button" tabindex="0" onclick="switchList('${l.id}')" onkeydown="activateOnKey(event, () => switchList('${l.id}'))">
+      <div class="list-row ${l.id===store.currentListId?'current':''}" role="button" tabindex="0" onclick="switchList('${escapeHtml(l.id)}')" onkeydown="activateOnKey(event, () => switchList('${escapeHtml(l.id)}'))">
         <span class="lr-name">${escapeHtml(l.name)}${l.share ? " 🔗" : ""}</span>
         <span class="lr-count">${l.items.filter(i=>!i.completedAt).length}개</span>
       </div>`).join("");
@@ -1374,7 +1461,7 @@ function renderModal(){
       <div class="section-title">공유</div>
       <div class="share-status">
         <div class="ss-code">${escapeHtml(list.share.code)}</div>
-        <div class="ss-hint">이 코드(또는 링크)를 아는 사람은 누구나 이 리스트를 읽고 쓸 수 있어요. 인원 제한은 없어요.<br>1년 동안 아무도 수정하지 않으면 공유방은 자동으로 정리돼요.</div>
+        <div class="ss-hint">이 코드(또는 링크)를 아는 사람은 누구나 이 리스트를 읽고 쓸 수 있어요. 인원 제한은 없어요.<br><b>상대가 고친 것은 최대 ${SYNC_POLL_SEC}초 뒤에 나타나요</b> — 바로 안 보여도 고장이 아니에요.<br>1년 동안 아무도 수정하지 않으면 공유방은 자동으로 정리돼요.</div>
         <div class="copy-row">
           <button onclick="copyText('${escapeHtml(list.share.code)}')">코드 복사</button>
           <button class="ghost" onclick="copyText('${escapeHtml(shareLinkFor(list.share.code))}')">링크 복사</button>
@@ -1387,7 +1474,7 @@ function renderModal(){
     ` : `
       <div class="section-title">공유</div>
       <div class="toggle-row">
-        <div><div class="tr-text">이 리스트 공유하기</div><div class="tr-sub">방 코드를 만들어 다른 사람과 실시간으로 같이 써요</div></div>
+        <div><div class="tr-text">이 리스트 공유하기</div><div class="tr-sub">방 코드를 만들어 다른 사람과 같이 써요 — 상대가 고친 것은 <b>최대 ${SYNC_POLL_SEC}초 뒤</b>에 나타나요</div></div>
         <button class="switch" onclick="enableShare()" aria-pressed="false" aria-label="공유 켜기" ${shareBusy?'disabled':''}><span class="knob"></span></button>
       </div>
       ${shareBusy ? `<div class="busy-text">공유방 만드는 중…</div>` : ""}
@@ -1423,7 +1510,7 @@ function renderModal(){
       <div class="field-label">다른 리스트로 옮기기</div>
       <div class="field-row">
         <select class="field-input" id="move-target">
-          ${others.map(l => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join("")}
+          ${others.map(l => `<option value="${escapeHtml(l.id)}">${escapeHtml(l.name)}</option>`).join("")}
         </select>
         <button onclick="moveItemToList(document.getElementById('move-target').value)">이동</button>
       </div>
@@ -1436,7 +1523,7 @@ function renderModal(){
           ${detailError ? `<div class="err-text" role="alert">${escapeHtml(detailError)}</div>` : `<div class="hint-text">내용을 고치면 닫을 때 저장돼요.</div>`}
           <div class="toggle-row">
             <div class="tr-text">우선순위</div>
-            <button class="switch ${item.priority?'on':''}" onclick="togglePriority('${item.id}')" aria-pressed="${item.priority?'true':'false'}" aria-label="우선순위 토글"><span class="knob"></span></button>
+            <button class="switch ${item.priority?'on':''}" onclick="togglePriority('${escapeHtml(item.id)}')" aria-pressed="${item.priority?'true':'false'}" aria-label="우선순위 토글"><span class="knob"></span></button>
           </div>
           <div class="field-label">알림</div>
           <div class="field-row">
@@ -1448,7 +1535,7 @@ function renderModal(){
           ${item.remindAt ? `<div style="margin:8px 20px 0;"><button class="btn-ghost" style="border:none;border-radius:10px;padding:6px 12px;font-size:12px;background:#F4F2EA;color:#5B5A52;cursor:pointer;" onclick="clearReminder()">알림 해제</button></div>` : ""}
           ${moveBlock}
           <div class="modal-actions">
-            <button class="btn-danger-quiet" onclick="askRemoveItem('${item.id}','detail')">삭제</button>
+            <button class="btn-danger-quiet" onclick="askRemoveItem('${escapeHtml(item.id)}','detail')">삭제</button>
             <button class="btn-primary" onclick="saveDetailText()">저장</button>
           </div>
         </div>
@@ -1554,7 +1641,7 @@ function renderModal(){
       <div class="modal-backdrop open">
         <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
           <div class="modal-head" id="modal-title">공유된 3초할일이에요</div>
-          <div class="modal-body">"${escapeHtml(data.name || '공유 리스트')}" 리스트(${count}개 항목)에 참여할까요? 참여하면 새 리스트로 추가되고, 이후 변경사항이 서로 실시간으로 동기화돼요.</div>
+          <div class="modal-body">"${escapeHtml(data.name || '공유 리스트')}" 리스트(${count}개 항목)에 참여할까요? 참여하면 새 리스트로 추가되고, 이후 변경사항이 서로 자동으로 맞춰져요 — 상대가 고친 것은 최대 ${SYNC_POLL_SEC}초 뒤에 나타나요.</div>
           <div class="modal-actions">
             <button class="btn-ghost" onclick="declineRoomJoin()">무시하기</button>
             <button class="btn-primary" onclick="acceptRoomJoin()">참여하기</button>
@@ -1587,12 +1674,19 @@ window.addEventListener("storage", (e) => {
   render();
 });
 
-// 2) 서비스워커 등록(오프라인 캐싱) — 입력 흐름과 무관하게 백그라운드에서.
-//    래퍼(Tauri) 안에서는 등록하지 않는다(위 isTauriRuntime 주석 참고). 웹은 그대로.
+/* 2) 서비스워커 등록(오프라인 캐싱) — 래퍼(Tauri) 안에서는 등록하지 않는다
+ *    (위 isTauriRuntime 주석 참고). 웹은 그대로.
+ *
+ * ⚠️ **`window.load`에 걸지 마라.** 걸어 뒀다가 2026-09-27에 실측으로 잡혔다:
+ * `fonts/fonts.css` 하나가 응답을 못 받으면 `load`가 **영영 안 뜨고** 등록 자체가
+ * 일어나지 않는다(`readyState`가 `interactive`에서 멈춘다). 그런데 **앱은 멀쩡하게 뜬다**
+ * — 폰트 `<link>`는 `media="print"` 기법으로 렌더를 막지 않으니까. 사용자도 개발자도
+ * 이상을 못 보고, 다음에 오프라인으로 열면 그냥 안 열린다. 형제 앱에서도 같은 결함이 났다.
+ *
+ * 이 코드는 이미 `render()` **뒤에** 도는 자리라 지금 바로 불러도 첫 화면을 늦추지 않는다
+ * (`(p)` 묶음이 "어떤 자원도 렌더를 막지 않는지"를 매 실행 확인한다). */
 if ("serviceWorker" in navigator && !isTauriRuntime()) {
-  window.addEventListener("load", () => {
-    navigator.serviceWorker.register("sw.js").catch(() => {});
-  });
+  navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 
 // 3) 공유 링크(#room=코드)로 열렸는지는 렌더 이후 비동기로만 확인 — 있어도 모달은 나중에
@@ -1621,6 +1715,10 @@ window.addEventListener("focus", () => {
 
 // 6) 리마인더는 30초 간격으로 확인(브라우저 Notification API + 등록된 서비스워커로 로컬 알림).
 //    최초 알림은 사용자가 "알림 설정"을 눌렀을 때만 권한을 요청한다 — 페이지 로드 시점엔 절대 묻지 않음.
+/* "n초 전"이 멈춰 있으면 그것도 거짓이다. 헤더 한 줄만 다시 칠한다 —
+ * render()를 부르면 입력창 포커스를 빼앗는다(2026-09-12에 실제로 그랬다). */
+setInterval(() => { if (getCurrentList().share) paintHeaderSub(); }, 5000);
+
 setInterval(checkReminders, REMINDER_CHECK_MS);
 checkReminders();
 </script>

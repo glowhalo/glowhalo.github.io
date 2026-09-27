@@ -146,6 +146,11 @@
   .autotag { font-size:10px; font-weight:500; color:#5C564F; }
   /* 예시 데이터 경고. 맨 아래 작은 글씨로는 안 읽힌다 — 내용보다 **위**에 둔다.
      (자매 앱 dividend-passbook f18f7ec의 .example-banner를 이 앱 팔레트에 맞춘 것) */
+  /* 읽지 못한 저장값 안내. 예시 배너와 같은 골격을 쓰지만 색을 달리해 더 센 경고로 읽히게 한다. */
+  .broken-banner { margin:0 20px 14px; padding:12px 14px; border-radius:12px; background:#F6DADA; border:1px solid #E0A9A9; color:#8E2F2F; }
+  .broken-banner .eb-body { color:#7A2A2A; }
+  .broken-banner .eb-btn { background:#8E2F2F; }
+  .broken-banner .eb-btn.plain { background:#FDF4EC; color:#8E2F2F; border:1px solid #E0A9A9; margin-top:8px; }
   .example-banner { margin:0 20px 14px; padding:12px 14px; border-radius:12px; background:#F7E2DA; border:1px solid #E6C4B6; color:#9E4B34; }
   .example-banner .eb-title { font-size:14px; font-weight:700; }
   .example-banner .eb-body { font-size:12px; line-height:1.6; margin-top:4px; color:#7A3D2A; }
@@ -226,6 +231,7 @@
     <p class="sub">애기야가자·맘카페·인스타에서 발견한 곳을 모아두는 지도 메모장</p>
   </div>
 
+  <div id="broken-banner"></div>
   <div id="example-banner"></div>
 
   <div class="map-wrap">
@@ -300,7 +306,8 @@ function loadLocalTypes(){
     try {
       const parsed = JSON.parse(saved);
       if(Array.isArray(parsed)) customTypes = parsed;
-    } catch(e){ /* 저장값 손상 시 빈 목록으로 시작 */ }
+      else markStorageBroken(saved);
+    } catch(e){ markStorageBroken(saved); }
   }
   lastSavedTypes = JSON.stringify(customTypes);
 }
@@ -322,7 +329,13 @@ function createCustomType(nameRaw, iconRaw){
   const newType = { key, icon, color };
   newType.id = "custom-" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
   customTypes = [...customTypes, newType];
-  persistTypes();
+  // 저장이 실패하면 `persistTypes()`가 화면 상태까지 되돌린다. 그때 **성공을 돌려주면 안 된다** —
+  // 부르는 쪽이 이 값을 그 장소의 구분값으로 배정해서, **존재하지 않는 구분값이 붙은 장소**가 생긴다.
+  // (자율 QA 실측 2026-09-25: 공간을 채운 뒤 부르면 저장은 실패했는데 성공을 돌려줬다.)
+  if(!persistTypes()){
+    renderFilters();
+    return null;
+  }
   renderFilters();
   return newType;
 }
@@ -486,6 +499,49 @@ function ensureHome(onReady){
   openPicker(null, loc => { saveHome(loc); onReady(); });
 }
 
+/* ---------- 저장값을 읽지 못했을 때 ----------
+   예전에는 `catch`가 **아무 말 없이 기본 샘플로 돌아갔다.** 그래서 이런 일이 벌어졌다
+   (실측, 2026-09-25): 깨진 값이 있는 채로 열면 내 기록 대신 예시가 보이고 알림은 0건 →
+   사용자가 "사라졌네" 하며 즐겨찾기를 한 번 누르면 **그 한 번이 깨진 원본을 예시로 덮어쓴다.**
+   **복구 가능한 상태가 복구 불가로 바뀌는 것**이 이 결함의 본질이었다.
+
+   그래서 손상을 알면:
+     1) **아무것도 쓰지 않는다** — 마지막 사본을 지우지 않는다.
+     2) 깨진 원본을 **파일로 내려받을 길**을 준다.
+     3) 새로 시작하는 것은 사용자가 확인해야만 한다.
+   저장 키를 더 만들지 않으려고 구조체를 메모리에만 둔다.                        */
+let storageBroken = false;
+let brokenRaw = null;
+
+function markStorageBroken(raw){
+  storageBroken = true;
+  if(brokenRaw === null) brokenRaw = raw;
+}
+
+function downloadBroken(){
+  try {
+    const blob = new Blob([String(brokenRaw == null ? "" : brokenRaw)], { type:"application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "아기랑갈곳-읽지못한저장값.json";
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  } catch(err){
+    alert("내려받기에 실패했어요: " + (err && err.message ? err.message : err));
+  }
+}
+
+function startFreshAfterBroken(){
+  if(!confirm("읽지 못한 저장값을 지우고 새로 시작할까요?\n\n먼저 «읽지 못한 값 내려받기»로 파일을 빼 두는 편이 안전해요. 이 동작은 되돌릴 수 없어요.")) return;
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(TYPES_STORAGE_KEY);
+  } catch(e){ /* 지우기까지 막히면 아래 상태만 풀어 준다 */ }
+  storageBroken = false;
+  brokenRaw = null;
+  location.reload();
+}
+
 const STORAGE_KEY = "baby-place-registry:places";
 let idSeq = 10;
 /* ⚠️ 아래는 화면을 채워 보기 위한 **예시 데이터**다. 실제 기록이 아니다.
@@ -532,6 +588,28 @@ function nextIdSeq(){
   }, 0) + 1;
 }
 
+/* 손댈 수 없는 레코드를 만들지 않는다 — **유령 데이터**.
+   실측(자율 QA 2026-09-27): `id`가 없거나 `null`인 레코드는 **화면에는 보이는데 지워지지 않는다.**
+   카드는 `data-id="undefined"`로 그려지고, 삭제는 `x.id !== "undefined"`로 걸러서 영원히 안 맞는다.
+   즐겨찾기·만족도·수정도 같은 이유로 전부 먹지 않는다. 이름이 없으면 카드에 글자 그대로
+   「undefined」가 뜬다.
+
+   손으로 고친 파일이나 옛 판본에서 올 수 있다(가져오기는 막고 있다 — `parseBackup`이 이름을
+   요구하고 id를 새로 매긴다). **지우지 않고 고쳐 준다** — 남의 기록을 조용히 버리는 것보다 낫다.
+   저장은 하지 않는다(손상 처리와 같은 이유). 다음 변경 때 함께 저장된다. */
+function repairRecords(list){
+  const seen = new Set();
+  return list.map(p => {
+    const out = {...p};
+    const id = out.id == null ? "" : String(out.id);
+    if(!id.trim() || seen.has(id)) out.id = String(idSeq++);
+    else out.id = id;
+    seen.add(out.id);
+    if(typeof out.name !== "string" || !out.name.trim()) out.name = "이름 없음";
+    return out;
+  });
+}
+
 function loadLocalState(){
   const saved = localStorage.getItem(STORAGE_KEY);
   if(saved){
@@ -543,11 +621,19 @@ function loadLocalState(){
         places = parsed;
         idSeq = nextIdSeq();
       }
-    } catch(e){ /* 저장값 손상 시 기본 샘플 유지 */ }
+      else markStorageBroken(saved);   // 배열이 아니면 우리 형식이 아니다
+    } catch(e){ markStorageBroken(saved); }
   }
-  places = places.map(p => ({...p, types: normalizeTypes(p)}));
-  // 되돌릴 기준선. 이게 없으면 첫 저장 실패 때 돌아갈 곳이 없다.
-  lastSavedPlaces = JSON.stringify(places);
+  const normalized = repairRecords(places.map(p => ({...p, types: normalizeTypes(p)})));
+  /* 되돌릴 기준선. 이게 없으면 첫 저장 실패 때 돌아갈 곳이 없다.
+     ⚠️ **기준선은 저장소와 같은 모양이어야 한다.** 정규화한 배열로 기준선을 잡으면
+     구 분류값(`놀곳`→`야외놀이`)이 있는 데이터에서 **기준선 ≠ 저장소**가 되어,
+     첫 저장 때마다 "다른 탭이 썼다"로 갈라진다. 실측(2026-09-27)으로 확인했고,
+     비교가 이름·위치 기준(`sameSpot`)이라 결과는 같았지만 **모양을 어긋나게 둘 이유가 없다.**
+     (다른 앱에서는 같은 어긋남이 거짓 충돌 경고로 터졌다 — ORDERS 2026-09-27.)
+     그래서 읽어온 **원문 그대로**를 기준선으로 쓰고, 정규화는 화면 쪽에만 둔다. */
+  lastSavedPlaces = saved && Array.isArray(places) ? saved : JSON.stringify(normalized);
+  places = normalized;
 }
 
 /* ---------- 저장 실패를 삼키지 않는다 ----------
@@ -563,6 +649,14 @@ let lastSavedTypes = null;
 let saveBroken = false;       // 연속 실패에 같은 알림을 쏟아내지 않기 위한 표시
 
 function writeLocal(key, json, onOk){
+  if(storageBroken){
+    // 마지막 사본을 지우지 않는다. 사용자가 «새로 시작»을 고르기 전까지는 아무것도 쓰지 않는다.
+    if(!saveBroken){
+      saveBroken = true;
+      alert("저장된 기록을 읽지 못한 상태라, 덮어쓰지 않으려고 저장을 멈춰 두었어요.\n\n위 안내에서 «읽지 못한 값 내려받기»로 파일을 빼 둔 뒤 «새로 시작»을 골라주세요.");
+    }
+    return false;
+  }
   try {
     localStorage.setItem(key, json);
     if(onOk) onOk();
@@ -623,7 +717,44 @@ function rollbackToSaved(err){
     + (lastRemoved ? " (지운 항목의 되돌리기는 그대로 둡니다.)" : "") + howTo + why);
 }
 
+/* 탭을 둘 열면 각 탭이 자기 메모리의 배열을 통째로 덮어쓴다 —
+   실측(자율 QA 2026-09-25): 탭1에서 등록하고 탭2에서 등록하면 **탭1의 기록이 사라진다.**
+   탭2는 열 때의 상태만 알고 탭1의 추가를 모른다. (자매 앱 coach-practice가 같은 결함으로 반려됐다.)
+
+   그래서 쓰기 직전에 **저장소가 내가 아는 것과 같은지** 본다. 다르면 다른 탭이 쓴 것이므로
+   **두 쪽을 합친 뒤** 쓴다. 합치는 기준은 가져오기와 같다(`sameSpot` — 이름+위치).
+   ⚠️ "저장소에 있는데 내게 없는 것"을 그냥 더하면 **내가 방금 지운 것이 되살아난다.**
+   그래서 내가 마지막으로 본 저장 내용을 기준선으로 두고 셋을 대조한다 —
+   다른 탭이 **더한 것**은 가져오고, 다른 탭이 **지운 것**은 내 쪽에서도 지운다. */
+function mergeOtherTabWrites(){
+  let stored = null;
+  try { stored = localStorage.getItem(STORAGE_KEY); } catch(e){ return; }
+  if(stored === null || stored === lastSavedPlaces) return;   // 다른 탭이 쓴 것이 없다
+  let other = null, base = null;
+  try {
+    other = JSON.parse(stored);
+    base = lastSavedPlaces === null ? [] : JSON.parse(lastSavedPlaces);
+  } catch(e){ return; }                                       // 손상은 손상 경로가 다룬다
+  if(!Array.isArray(other) || !Array.isArray(base)) return;
+
+  // **기준선(내가 마지막으로 본 저장 내용)과 셋을 대조한다.** 그냥 "저장소에 있는데 내게 없는 것"을
+  // 더하면, 내가 방금 지운 것이 다시 살아난다 — "지워지지 않는다"가 되므로 기준선이 필요하다.
+  const named = x => x && typeof x.name === "string" ? { ...x, name:String(x.name) } : null;
+  const has = (list, x) => list.some(y => sameSpot(x, y));
+
+  const addedElsewhere = other.map(named).filter(Boolean).filter(o => !has(base, o) && !has(places, o));
+  const deletedElsewhere = base.map(named).filter(Boolean).filter(b => !has(other, b));
+
+  if(addedElsewhere.length === 0 && deletedElsewhere.length === 0){ lastSavedPlaces = stored; return; }
+  let next = places;
+  if(deletedElsewhere.length) next = next.filter(mine => !has(deletedElsewhere, mine));
+  if(addedElsewhere.length) next = [...next, ...addedElsewhere.map(o => ({ ...o, id: String(idSeq++) }))];
+  places = next;
+  renderAll();
+}
+
 function persist(){
+  mergeOtherTabWrites();
   const json = JSON.stringify(places);
   return writeLocal(STORAGE_KEY, json, () => { lastSavedPlaces = json; });
 }
@@ -864,7 +995,7 @@ function readBackupText(text){
     t.id = "custom-" + Date.now().toString(36) + Math.random().toString(36).slice(2,6);
     customTypes = [...customTypes, t];
   });
-  fresh.forEach(p => places.unshift({ id: String(idSeq++), ...p }));
+  fresh.forEach(p => places.unshift({ ...p, id: String(idSeq++) }));   // id는 펼치기 뒤에(위 주석 참고)
   if(!commitImport()){
     // 실패 안내는 commitImport()가 한다. 여기서 "가져왔어요"라고 하면 거짓말이다.
     renderAll();
@@ -897,7 +1028,7 @@ function renderFootnote(){
   }
 }
 
-function renderAll(){ renderFootnote(); renderExampleBanner(); renderUndoBar(); renderAdd(); renderFilters(); renderListBar(); renderSortRow(); renderList(); renderMarkers(); }
+function renderAll(){ renderFootnote(); renderBrokenBanner(); renderExampleBanner(); renderUndoBar(); renderAdd(); renderFilters(); renderListBar(); renderSortRow(); renderList(); renderMarkers(); }
 
 /* 예시 데이터 경고 — 지도·목록보다 **위**에 둔다. 맨 아래 작은 글씨는 안 읽힌다는 것이 이 건의 핵심이다.
    인라인 onclick은 쓰지 않는다(이 앱은 2026-09-11에 전부 이벤트 위임으로 걷어냈다).  */
@@ -913,6 +1044,26 @@ function renderUndoBar(){
     </div>`;
   el.querySelector("#undo-btn").addEventListener("click", undoRemove);
   el.querySelector("#undo-close").addEventListener("click", dismissUndo);
+}
+
+/* 저장값을 읽지 못했다는 안내 — **예시 배너보다 위**에 둔다.
+   이 상태에서는 화면의 목록이 내 기록이 아니라 예시라는 것을 먼저 알아야 한다. */
+function renderBrokenBanner(){
+  const el = document.getElementById("broken-banner");
+  if(!el) return;
+  if(!storageBroken){ el.innerHTML = ""; return; }
+  el.innerHTML = `
+    <div class="broken-banner" role="alert">
+      <div class="eb-title">저장된 기록을 읽지 못했어요</div>
+      <div class="eb-body">저장값이 망가진 것 같아요. <b>지금 보이는 목록은 내 기록이 아니라 예시예요.</b>
+        덮어쓰지 않으려고 <b>저장을 멈춰 두었어요.</b><br>
+        전에 <b>💾 내보내기</b>로 빼 둔 파일이 있으면 <b>📂 가져오기</b>로 그대로 되살릴 수 있어요.
+        없으면 아래에서 읽지 못한 원본을 파일로 빼 두세요 — 나중에 살릴 여지가 남습니다.</div>
+      <button type="button" class="eb-btn" id="broken-download">읽지 못한 값 내려받기</button>
+      <button type="button" class="eb-btn plain" id="broken-fresh">지우고 새로 시작</button>
+    </div>`;
+  el.querySelector("#broken-download").addEventListener("click", downloadBroken);
+  el.querySelector("#broken-fresh").addEventListener("click", startFreshAfterBroken);
 }
 
 function renderExampleBanner(){
@@ -1107,11 +1258,19 @@ function renderManualBox(el){
     </div>
     ${mapReady ? `<button type="button" class="manuallink" id="to-search-btn">🔍 상호명 검색으로</button>` : ""}`;
   const input = document.getElementById("raw-input");
-  input.addEventListener("input", e => { rawInput = e.target.value; document.getElementById("start-btn").classList.toggle("active", rawInput.trim().length>0); });
+  const startBtn = document.getElementById("start-btn");
+  startBtn.classList.toggle("active", rawInput.trim().length>0);   // 물려받은 값에도 맞춘다
+  input.addEventListener("input", e => { rawInput = e.target.value; startBtn.classList.toggle("active", rawInput.trim().length>0); });
   input.addEventListener("keydown", e => { if(e.key==="Enter") startRegister(); });
   document.getElementById("start-btn").addEventListener("click", startRegister);
   if(mapReady){
-    document.getElementById("to-search-btn").addEventListener("click", () => { addMode = "search"; searchQuery = ""; searchResults = []; searchDone = false; renderAdd(); });
+    // 모드는 **처리 방식**이지 다른 서랍이 아니다. 방금 입력한 것을 가져간다.
+    // (B-8, 2026-09-27: 전환하면 입력칸이 비어 사용자가 링크를 다시 붙여넣어야 했다.)
+    document.getElementById("to-search-btn").addEventListener("click", () => {
+      addMode = "search"; searchQuery = rawInput; searchResults = []; searchDone = false;
+      renderAdd();
+      if(searchQuery.trim()) onSearchInput(searchQuery);
+    });
   }
 }
 
@@ -1128,9 +1287,19 @@ function renderSearchBox(el){
     <button type="button" class="manuallink" id="to-manual-btn">✏️ 직접 입력할래요</button>`;
   const input = document.getElementById("search-input");
   input.addEventListener("input", e => { searchQuery = e.target.value; onSearchInput(searchQuery); });
-  input.addEventListener("keydown", e => { if(e.key==="Enter"){ e.preventDefault(); clearTimeout(searchDebounceTimer); runSearch(searchQuery.trim()); } });
-  document.getElementById("search-btn").addEventListener("click", () => { clearTimeout(searchDebounceTimer); runSearch(searchQuery.trim()); });
-  document.getElementById("to-manual-btn").addEventListener("click", () => { addMode = "manual"; renderAdd(); });
+  const submit = () => {
+    const v = searchQuery.trim();
+    if(!v) return;
+    // 링크면 검색이 아니라 등록이다. 버튼·Enter도 붙여넣기와 같게 판단한다.
+    if(detectSource(v) === "link"){ registerFromInput(v); return; }
+    clearTimeout(searchDebounceTimer);
+    runSearch(v);
+  };
+  input.addEventListener("keydown", e => { if(e.key==="Enter"){ e.preventDefault(); submit(); } });
+  document.getElementById("search-btn").addEventListener("click", submit);
+  document.getElementById("to-manual-btn").addEventListener("click", () => {
+    addMode = "manual"; rawInput = searchQuery; renderAdd();
+  });
   renderSearchResults();
 }
 
@@ -1153,11 +1322,27 @@ function renderSearchResults(){
   }
 }
 
+/* 검색칸에 **링크를 붙여넣는 것**이 이 앱의 간판 동작이다.
+   그런데 검색 모드의 입력은 무조건 `runSearch()`로 가서, 링크를 넣으면
+   「검색 결과가 없어요」가 뜨고 `/extract` 워커는 한 번도 불리지 않았다 —
+   **입력칸 바로 위에 「링크만 붙여넣으면 저장돼요」라고 써 놓고서** 그랬다(B-7, 2026-09-27).
+
+   안내문을 되돌리는 게 아니라 **동작을 안내문에 맞춘다.**
+   링크면 검색을 돌리지 않고 곧장 링크 등록 경로로 보낸다 — 모드 전환을 사용자에게 시키지 않는다. */
 function onSearchInput(v){
   clearTimeout(searchDebounceTimer);
   searchDone = false;
   if(!v.trim()){ searchResults = []; renderSearchResults(); return; }
+  if(detectSource(v) === "link"){ registerFromInput(v); return; }
   searchDebounceTimer = setTimeout(() => runSearch(v.trim()), 350);
+}
+
+// 검색칸·직접입력칸 어느 쪽에서 왔든 같은 등록 경로를 탄다.
+function registerFromInput(v){
+  clearTimeout(searchDebounceTimer);
+  searchResults = []; searchDone = false;
+  rawInput = v;
+  startRegister();
 }
 
 /* 지도가 떴다고 상호명 검색이 되는 것은 아니다.
@@ -1208,7 +1393,9 @@ function pickSearchResult(item){
     source: "search",
     name: item.place_name,
     address: item.road_address_name || item.address_name || "",
-    types: [guessedType || "야외놀이"],
+    // 모르면 모른다고 한다. 「야외놀이」로 두면 **틀린 것을 확신 있게** 보여주고,
+    // 나중에 「야외놀이」로 거르면 고깃집이 딸려 나온다(B-9, 2026-09-27).
+    types: [guessedType || "기타"],
     memo: "",
     lat: parseFloat(item.y),
     lng: parseFloat(item.x)
@@ -1263,12 +1450,20 @@ function renderDraftForm(el){
 function startRegister(){
   const raw = rawInput.trim();
   if(!raw) return;
-  const center = mapReady ? currentMapCenter() : null;
+  /* ⚠️ **사용자가 고르지 않은 좌표를 넣지 않는다.**
+     예전에는 무조건 지도 중심(`currentMapCenter()`)을 박았다. 실측(2026-09-27):
+     「부산 어딘가 식당」과 「제주 어딘가 카페」가 **둘 다 서울 지도 중심 좌표**로 저장됐다.
+     따라온 것 셋 — 핀이 한 자리에 겹치고, 「📍 위치 미지정」이 **영영 안 뜨고**(실측 0건),
+     「집에서 가까운순」이 전부 같은 거리로 계산돼 거짓말을 했다.
+     **사용자는 위치를 지정한 적이 없는데 지정된 줄 안다.** 조용히 틀린 데이터가 쌓인다.
+
+     좌표는 **검색으로 고른 경우**(`pickSearchResult`)와 **직접 찍은 경우**(`setLocationFor`·
+     초안의 「📍 위치 수정」)에만 들어간다. 그 외에는 비워 둬야 「위치 미지정」이 떠서 찍을 수 있다. */
   const source = detectSource(raw);
   // 텍스트/링크 원문 자체에서 바로 뽑을 수 있는 힌트가 있으면 즉시 반영(네트워크 대기 없음).
   // 링크는 이후 confirmRegister에서 저장 직후 백그라운드로 실제 페이지 내용까지 한 번 더 확인한다.
   const guessedType = guessTypeFromText(raw);
-  draft = { raw, source, name: guessName(raw), types: guessedType ? [guessedType] : ["야외놀이"], memo:"", lat: center ? center.lat : undefined, lng: center ? center.lng : undefined };
+  draft = { raw, source, name: guessName(raw), types: guessedType ? [guessedType] : ["기타"], memo:"", lat: undefined, lng: undefined };
   rawInput = "";
   renderAdd();
 }
@@ -1282,7 +1477,10 @@ function confirmRegister(){
   draft = null;
   renderAdd();
   const id = String(idSeq++);
-  places.unshift({ id, ...newPlace });
+  // ⚠️ id는 **펼치기 뒤**에 놓는다. 앞에 두면 `newPlace`가 `id`를 들고 있을 때 조용히 이기고,
+  // 같은 id가 둘 생긴다(자매 앱 dividend에서 실제로 났다 — ORDERS 2026-09-27).
+  // 지금은 `draft`에 `id`가 없어 재현되지 않지만, 필드 하나 늘면 바로 밟는 자리다.
+  places.unshift({ ...newPlace, id });
   renderList();
   renderMarkers();
   persist();
