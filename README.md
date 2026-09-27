@@ -11,3 +11,6 @@
 
 - [`privacy/`](privacy/index.html) — 개인정보처리방침
 - [`promptdeck/privacy.html`](promptdeck/privacy.html) — PromptDeck(Chrome 확장) 스토어 등록에 필요한 개인정보처리방침(URL 고정 필요, 별도 유지)
+- [`niche-api-examples/`](niche-api-examples/) — 니치API(하윤) 상품 10개의 curl/Python/JS 호출
+  예제. 검색엔진·개발자 발견성 목적(회장 승인 2026-09-27, "깃허브만 네가 직접 하고"). 실제
+  서비스 코드는 없고 마켓플레이스 게이트웨이를 호출하는 예제 코드만 있다.
