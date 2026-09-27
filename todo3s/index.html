@@ -1,0 +1,1628 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>3초할일</title>
+<!-- ⚠️ 이 줄은 배포본에만 있다(정본 glowhalo-dev 에는 없음).
+     2026-09-27 테스트용 배포(회장 상시 승인). 검색엔진에 잡히면 안 된다.
+     테스트가 끝나면 이 폴더와 robots.txt 항목을 같이 내린다. -->
+<meta name="robots" content="noindex, nofollow" />
+<meta name="description" content="여러 리스트·우선순위·알림·실시간 공유를 갖춘 초단순 할 일 메모 앱. 앱을 열면 바로 타이핑할 수 있다." />
+<link rel="manifest" href="manifest.json" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<meta name="theme-color" content="#FAF9F5" />
+<!-- 웹폰트는 앱 안에 동봉한다(fonts/). 스토어 전용 오프라인 번들이라 외부 도메인을
+     부르면 오프라인에서 디자인 글꼴이 안 뜨고, 스토어 심사에서 설명해야 하는 외부
+     호출도 남는다. 동봉 뒤에는 앱이 바깥으로 나가는 요청이 하나도 없다.
+
+     동봉했어도 **비동기 로딩은 그대로 둔다.** 이건 서버가 느려서가 아니라, 스타일시트
+     <link>가 그 자체로 렌더 블로킹이기 때문이다 — 2026-08-29에 정확히 이것 때문에
+     폰트가 시작을 막았다. 파일이 로컬이어도 같은 자리에 같은 함정이 있다.
+     글꼴이 준비되기 전에는 시스템 글꼴로 즉시 뜨고, 준비되면 그때 바꿔 그린다. -->
+<link rel="stylesheet" href="fonts/fonts.css" media="print" onload="this.media='all'" />
+<noscript><link rel="stylesheet" href="fonts/fonts.css" /></noscript>
+<style>
+  * { box-sizing: border-box; }
+  html, body { height:100%; margin:0; }
+  body { background:#EDEDE6; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; display:flex; justify-content:center; overflow:hidden; }
+  .display { font-family:'Gowun Dodum', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; }
+  .app { width:100%; max-width:420px; height:100vh; height:100dvh; background:#FAF9F5; box-shadow:0 0 40px rgba(0,0,0,0.06); display:flex; flex-direction:column; overflow:hidden; }
+  .header { padding:12px 20px 10px; flex-shrink:0; }
+  .header-top { display:flex; align-items:center; justify-content:space-between; gap:8px; min-width:0; }
+  .list-switch-btn { display:flex; align-items:center; gap:4px; background:none; border:none; padding:6px 0; min-height:44px; cursor:pointer; font-size:20px; color:#2B2E35; max-width:78%; min-width:0; }
+  .list-switch-btn .lsb-name { min-width:0; font-family:'Gowun Dodum', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .list-switch-btn .lsb-caret { font-size:12px; color:#73736C; flex-shrink:0; }
+  .icon-btn { width:40px; height:40px; border-radius:999px; border:none; background:#EDEDE6; color:#5B5A52; font-size:15px; cursor:pointer; display:flex; align-items:center; justify-content:center; flex-shrink:0; position:relative; }
+  /* 눈에 보이는 크기는 그대로 두고 손가락이 닿는 영역만 44px 이상으로 넓힌다. */
+  .icon-btn::after, .checkbox::after, .star-btn::after, .trash-btn::after { content:''; position:absolute; left:50%; top:50%; width:44px; height:44px; transform:translate(-50%,-50%); }
+  .icon-btn.on { background:#EEF3EC; color:#4D7763; }
+  .header p { font-size:12px; margin:4px 0 0; color:#74736B; }
+  .content { flex:1; min-height:0; overflow-y:auto; padding:0 20px 16px; -webkit-overflow-scrolling:touch; }
+  .empty { text-align:center; padding:60px 0; color:#73736C; }
+  .empty .t1 { font-size:14px; } .empty .t2{ font-size:12px; margin-top:4px; }
+  .item-card { display:flex; align-items:flex-start; gap:10px; border-radius:16px; padding:12px 16px; background:#fff; border:1px solid #EBE9E0; margin-bottom:8px; min-width:0; }
+  /* flex 항목은 기본 min-width:auto라 자기 내용보다 작아지지 못한다 — 컨테이너가 좁아도
+     내용 폭만큼 버티며 밖으로 밀려난다. 2026-09-08 CI가 390px 화면에서 439px를 잡았는데,
+     이 컨테이너에서는 **재현하지 못했다**(폰트·Chromium 버전·긴 이름 등 다섯 가지를 바꿔 봤다).
+     그래서 이 min-width:0은 "원인을 짚고 고친 것"이 아니라 **이 부류를 막는 방어적 처리**다.
+     내용이 이미 들어맞을 때는 아무것도 바꾸지 않는다(좁아서 넘칠 때만 줄어든다).
+     진짜 원인은 같은 커밋의 넘침 검사가 다음 CI 실행에서 요소를 지목해 줄 것이다. */
+  .item-card > div { min-width:0; }
+  .item-card.done { background:#F4F3EE; }
+  .item-card.priority { background:#FFF9EC; border-color:#F0DDA6; }
+  .checkbox { margin-top:2px; flex-shrink:0; width:22px; height:22px; border-radius:6px; border:2px solid #C7C9C4; background:none; cursor:pointer; padding:0; position:relative; }
+  .checkbox.checked { border:2px solid #C7C9C4; background:#EDEDE6; display:flex; align-items:center; justify-content:center; color:#6A6C67; font-size:12px; font-weight:700; }
+  /* 알림이 꺼져 있는데 리마인더가 걸려 있을 때의 안내. 색은 #FAF9F5 배경에서 5.38:1(AA 통과). */
+  /* 저장 실패 안내. 지나칠 수 없게 눈에 띄되 배치를 밀지 않도록 한 줄로 둔다.
+     색은 #FDECE6 위에서 5.9:1(AA 통과). */
+  .save-failed { margin:0 20px 8px; padding:10px 12px; border-radius:10px; background:#FDECE6; color:#8C3A16; font-size:12px; line-height:1.5; }
+  .notif-blocked { margin:8px 20px 0; font-size:12px; line-height:1.5; color:#A64D22; }
+  .item-text { font-size:14px; line-height:1.6; color:#2B2E35; white-space:pre-line; flex:1; min-width:0; cursor:pointer; }
+  /* 키보드로 짚은 자리가 보여야 한다. 배치를 밀지 않도록 outline만 쓴다(테두리·여백 아님). */
+  .item-text:focus-visible, .list-row:focus-visible { outline:2px solid #4D7763; outline-offset:2px; border-radius:8px; }
+  .item-text.done { color:#6F6E67; text-decoration:line-through; cursor:default; }
+  .item-meta { display:flex; align-items:center; gap:6px; margin-top:4px; }
+  .item-meta .remind-chip { font-size:10px; color:#6A6C67; background:#EDEDE6; border-radius:999px; padding:2px 8px; }
+  .star-btn { background:none; border:none; cursor:pointer; font-size:18px; margin-top:1px; flex-shrink:0; color:#76756D; line-height:1; padding:0; position:relative; }
+  .star-btn.on { color:#926C26; }
+  .trash-btn { background:none; border:none; cursor:pointer; color:#7D6A6B; font-size:15px; margin-top:2px; flex-shrink:0; position:relative; }
+  .group-label { font-size:12px; font-weight:500; color:#74736B; margin:16px 0 8px 4px; }
+  .group-label:first-child { margin-top:0; }
+  .footer-hint { text-align:center; font-size:11px; color:#73736C; padding-top:8px; }
+  .input-bar { padding:8px 20px 12px; border-top:1px solid #EEEDE5; flex-shrink:0; }
+  .input-wrap { display:flex; align-items:center; gap:8px; border-radius:999px; padding:6px 6px 6px 16px; background:#fff; border:1px solid #E7E4DC; }
+  .input-wrap input { flex:1; min-width:0; border:none; outline:none; font-size:16px; padding:11px 0; color:#2B2E35; background:transparent; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; }
+  /* 입력이 비었을 때의 화살표는 흰색이었다 — 연한 바탕 위라 대비 1.27:1로 거의 안 보였다.
+     앱의 주 동작이라 어두운 색으로 바꾼다(#E7E4DC 위에서 4.93:1). 채움색·크기·배치는 그대로.
+     입력이 차면 초록 채움으로 바뀌므로 그때는 다시 흰 글자여야 한다. */
+  .send-btn { width:44px; height:44px; border-radius:999px; border:none; display:flex; align-items:center; justify-content:center; background:#E7E4DC; color:#646058; cursor:pointer; flex-shrink:0; }
+  .send-btn.active { background:#4D7763; color:#fff; }
+  .tabbar { display:flex; min-width:0; border-top:1px solid #EEEDE5; flex-shrink:0; }
+  .tab-btn { flex:1; padding:14px 0; min-height:48px; text-align:center; font-size:14px; font-weight:500; background:none; border:none; cursor:pointer; color:#73736C; }
+  .tab-btn.active { color:#4D7763; }
+  .badge { font-size:10px; margin-left:2px; }
+  .modal-backdrop { display:none; position:fixed; inset:0; z-index:60; background:rgba(43,46,53,0.45); align-items:center; justify-content:center; padding:20px; }
+  .modal-backdrop.open { display:flex; }
+  .modal-card { background:#FAF9F5; color:#2B2E35; border-radius:18px; width:min(360px,100%); max-height:calc(100dvh - 40px); overflow-y:auto; box-shadow:0 20px 60px rgba(0,0,0,0.25); }
+  .modal-head { padding:20px 20px 0; font-size:15px; font-weight:700; }
+  .modal-body { padding:8px 20px 4px; font-size:13px; line-height:1.7; color:#5B5A52; }
+  .modal-actions { display:flex; gap:8px; padding:16px 20px 20px; }
+  .modal-actions button { flex:1; border:none; border-radius:12px; padding:10px; font-size:13px; font-weight:500; cursor:pointer; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; }
+  .modal-actions .btn-ghost { background:#F4F2EA; color:#5B5A52; }
+  .modal-actions .btn-primary { background:#4D7763; color:#fff; }
+  .modal-actions .btn-danger { background:#A96168; color:#fff; }
+  /* 상세의 삭제는 저장과 같은 크기·같은 무게로 나란히 있었다(2026-09-18 QA 반려).
+   * 지우는 버튼이 저장보다 눈에 덜 띄고 폭도 좁아야 잘못 누르는 자리가 줄어든다. */
+  .modal-actions .btn-danger-quiet { flex:0 0 auto; background:none; color:#8C4A52; font-weight:400; padding:10px 14px; }
+  .field-label { font-size:12px; font-weight:500; color:#5B5A52; margin:14px 20px 6px; }
+  .field-input { display:block; width:calc(100% - 40px); margin:0 20px; border:1px solid #E7E4DC; border-radius:10px; padding:10px 12px; font-size:14px; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; background:#fff; color:#2B2E35; }
+  .field-row { display:flex; gap:8px; margin:0 20px; align-items:center; }
+  .field-row .field-input { margin:0; flex:1; }
+  .field-row button { flex-shrink:0; border:none; border-radius:10px; padding:10px 14px; font-size:13px; background:#4D7763; color:#fff; cursor:pointer; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; }
+  .list-row { display:flex; align-items:center; justify-content:space-between; gap:8px; padding:10px 20px; cursor:pointer; }
+  .list-row:hover { background:#F4F2EA; }
+  .list-row.current .lr-name { color:#4D7763; font-weight:700; }
+  .lr-name { font-size:14px; color:#2B2E35; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lr-count { font-size:11px; color:#73736C; flex-shrink:0; }
+  .divider { height:1px; background:#EEEDE5; margin:12px 0; }
+  .section-title { font-size:11px; font-weight:700; color:#74736B; margin:16px 20px 6px; letter-spacing:.02em; }
+  .share-status { margin:0 20px; border-radius:12px; padding:14px; background:#EEF3EC; }
+  .share-status .ss-code { font-size:18px; font-weight:700; letter-spacing:.06em; color:#2B2E35; font-family:monospace; }
+  .share-status .ss-hint { font-size:11px; color:#577464; margin-top:4px; }
+  .copy-row { display:flex; gap:8px; margin-top:10px; }
+  .copy-row button { flex:1; border:none; border-radius:10px; padding:8px; font-size:12px; background:#4D7763; color:#fff; cursor:pointer; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; }
+  .copy-row button.ghost { background:#fff; color:#4D7763; border:1px solid #C9DECF; }
+  .toggle-row { display:flex; align-items:center; justify-content:space-between; margin:0 20px; padding:12px 0; }
+  .toggle-row .tr-text { font-size:13px; color:#2B2E35; }
+  .toggle-row .tr-sub { font-size:11px; color:#74736B; margin-top:2px; }
+  .switch { position:relative; width:42px; height:24px; border-radius:999px; background:#DEDCD1; border:none; cursor:pointer; flex-shrink:0; }
+  .switch.on { background:#4D7763; }
+  .switch .knob { position:absolute; top:2px; left:2px; width:20px; height:20px; border-radius:999px; background:#fff; transition:left .15s ease; }
+  .switch.on .knob { left:20px; }
+  .err-text { font-size:11px; color:#A96168; margin:8px 20px 0; }
+  .busy-text { font-size:11px; color:#74736B; margin:8px 20px 0; }
+  .move-list-empty { font-size:12px; color:#73736C; margin:0 20px 4px; }
+
+  /* 검색 — 항목이 많아졌을 때만 목록 위에 조용히 나타난다(헤더 상시 노출은 입력창 자리를
+     뺏으므로 캡처 우선 원칙 위반). 스크롤과 함께 밀려 올라가서 평소엔 존재감이 없다. */
+  .search-row { position:relative; margin:12px 0 10px; }
+  .search-row input { width:100%; border:1px solid #E7E4DC; border-radius:12px; background:#fff; padding:9px 34px 9px 32px; font-size:14px; color:#2B2E35; outline:none; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; }
+  .search-row .sr-icon { position:absolute; left:11px; top:50%; transform:translateY(-50%); font-size:12px; color:#73736C; pointer-events:none; }
+  .search-row .sr-clear { position:absolute; right:4px; top:50%; transform:translateY(-50%); width:30px; height:30px; border:none; background:none; color:#74736B; font-size:13px; cursor:pointer; border-radius:999px; }
+  .search-count { font-size:11px; color:#74736B; margin:0 0 8px 4px; }
+  .bulk-row { padding:14px 0 4px; text-align:center; }
+  .bulk-row button { border:1px solid #E7CFD1; background:#fff; color:#AB6169; border-radius:999px; padding:9px 18px; min-height:44px; font-size:12px; cursor:pointer; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; }
+  .detail-edit { display:block; width:calc(100% - 40px); margin:10px 20px 0; border:1px solid #E7E4DC; border-radius:12px; padding:11px 12px; font-size:14px; line-height:1.6; color:#2B2E35; background:#fff; resize:vertical; min-height:76px; outline:none; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; }
+  .detail-edit:focus { border-color:#C9DECF; }
+  .hint-text { font-size:11px; color:#73736C; margin:6px 20px 0; }
+  .backup-row { display:flex; gap:8px; margin:0 20px; }
+  .backup-row button { flex:1; border:1px solid #E7E4DC; background:#fff; color:#5B5A52; border-radius:10px; padding:11px; min-height:44px; font-size:12px; cursor:pointer; font-family:'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<div id="app" class="app"></div>
+<div id="modal-root"></div>
+
+<script>
+/* =========================================================================
+ * 3초할일 — 캡처 우선(Capture-first) 원칙
+ * 앱을 열면 리스트 선택 화면·로딩 스피너·모달 없이 곧바로 입력 가능한 상태여야 한다.
+ * 새 기능(다중 리스트/우선순위/알림/공유)은 전부 "입력을 시작한 뒤에 선택적으로" 쓰는
+ * 흐름으로만 붙인다 — 이 원칙을 어기는 변경은 하지 않는다.
+ * ========================================================================= */
+
+const WORKER_BASE = "https://todo3s.glowhalo.org";
+const SYNC_DEBOUNCE_MS = 1200;
+const SYNC_POLL_MS = 20000;
+const REMINDER_CHECK_MS = 30000;
+// 검색창은 항목이 이만큼 쌓였을 때만 나타난다. 적을 때는 눈으로 훑는 게 더 빠르고,
+// 상시 노출은 "열면 바로 입력"이라는 첫 화면의 초점을 흐린다.
+const SEARCH_MIN_ITEMS = 15;
+
+// 공유 API 호출 전용 fetch 래퍼 — 캐시를 항상 끄고(구형 요청이 최신 동기화를 가려버리는
+// 사고 방지), 클라이언트 식별 헤더를 붙여 GET을 포함한 모든 요청이 항상 CORS 프리플라이트를
+// 거치도록 통일한다(단순 요청/프리플라이트 요청이 갈리면 배포 환경에 따라 캐시 계층 동작이
+// 달라질 수 있어, 아예 모든 호출을 같은 경로로 맞춰 두는 편이 안전하다).
+function apiFetch(path, options){
+  const opts = Object.assign({ cache: "no-store" }, options || {});
+  opts.headers = Object.assign({ "X-Checknote-Client": "1" }, (options && options.headers) || {});
+  return fetch(`${WORKER_BASE}${path}`, opts);
+}
+
+/* ---------- 래퍼(Tauri) 안에서 도는지 판별 ----------
+ * 스토어 배포판은 정적 파일이 앱 안에 이미 번들되어 있어 서비스워커의 오프라인 캐시가
+ * 할 일이 없고, 커스텀 스킴(tauri://…) 위에서는 등록이 되지 않거나 캐시가 오히려
+ * 낡은 화면을 붙잡는다. 그래서 래퍼 안에서만 서비스워커를 건너뛴다.
+ * 브라우저에서는 이 함수가 항상 false라 웹 동작은 하나도 달라지지 않는다.
+ * (Tauri v2가 어떤 신호를 노출하는지는 버전·설정에 따라 갈려서 아는 것을 다 본다.) */
+function isTauriRuntime(){
+  if (typeof window === "undefined") return false;
+  return window.isTauri === true
+      || "__TAURI_INTERNALS__" in window
+      || "__TAURI__" in window
+      || /^tauri:$/.test(location.protocol)
+      || /^tauri\.localhost$/.test(location.hostname);
+}
+
+// 저장 키는 이것 하나뿐이다. 2026-09-10 회장 확정으로 개명 전 키
+// (checknote_store_v2 · checknote_items_v1) 마이그레이션 경로를 전부 걷어냈다 —
+// 실사용자가 없어 "처음부터 새로 만든 앱"으로 취급하기로 했고, 안 쓰이는
+// 마이그레이션 코드는 남겨 둘수록 읽는 사람을 헷갈리게 하는 부채일 뿐이다.
+const STORAGE_KEY = "todo3s_store_v1";
+
+function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+// 따옴표까지 이스케이프한다. 이 값들은 본문뿐 아니라 value="..." 같은 속성 안에도 들어가는데,
+// 따옴표를 남겨두면 사용자가 친 리스트 이름·검색어가 속성을 빠져나와 onfocus= 같은 걸 심을 수 있다.
+/**
+ * `<div role="button" tabindex="0">`을 진짜 버튼처럼 쓰게 한다.
+ * 브라우저가 `<button>`에 공짜로 주는 것(Enter·Space로 눌림)을 직접 해 주는 것뿐이다.
+ * Space는 기본 동작이 **화면 스크롤**이라 반드시 막아야 한다 — 안 막으면 누를 때마다
+ * 목록이 한 화면씩 밀린다.
+ * 2026-09-12 이전에는 항목 글자와 리스트 전환 줄이 마우스로만 눌렸다. 키보드
+ * 사용자에게는 상세(수정·리마인더·이동·삭제)와 리스트 전환이 **통째로 없었다.**
+ */
+function activateOnKey(event, run){
+  if (event.key !== "Enter" && event.key !== " " && event.key !== "Spacebar") return;
+  event.preventDefault();
+  event.stopPropagation();
+  run();
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                  .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+function todayLabel(ts) {
+  const d = new Date(ts), today = new Date(), yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  const sameDay = (a, b) => a.toDateString() === b.toDateString();
+  if (sameDay(d, today)) return "오늘";
+  if (sameDay(d, yesterday)) return "어제";
+  return `${d.getMonth() + 1}월 ${d.getDate()}일`;
+}
+function tsToLocalInputValue(ts){
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function localInputValueToTs(v){
+  if(!v) return null;
+  const t = new Date(v).getTime();
+  return Number.isNaN(t) ? null : t;
+}
+function formatRemind(ts){
+  const d = new Date(ts);
+  const pad = n => String(n).padStart(2, "0");
+  const year = d.getFullYear() !== new Date().getFullYear() ? `${d.getFullYear()}. ` : "";
+  return `${year}${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/* ---------- 저장/불러오기 ---------- */
+
+// 첫 실행은 빈 리스트로 연다. 예전엔 "테스트1~5" 같은 개발용 더미가 들어 있어서
+// 처음 앱을 켠 사람이 남의 테스트 데이터부터 지우고 시작해야 했다. 빈 화면에는
+// 이미 안내문("아래 입력창에 새 항목을 적어보세요")이 뜨고 입력창에 포커스도 가 있다.
+function seedDemoItems(){
+  return [];
+}
+function normalizeItem(i){
+  return {
+    id: i.id != null ? i.id : uid(),
+    text: String(i.text || ""),
+    completedAt: typeof i.completedAt === "number" ? i.completedAt : null,
+    createdAt: typeof i.createdAt === "number" ? i.createdAt : Date.now(),
+    priority: !!i.priority,
+    remindAt: typeof i.remindAt === "number" ? i.remindAt : null,
+    notified: !!i.notified,
+  };
+}
+function loadStore(){
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && Array.isArray(parsed.lists) && parsed.lists.length > 0) {
+        parsed.lists = parsed.lists.map(l => ({
+          id: l.id != null ? l.id : uid(),
+          name: l.name || "리스트",
+          items: Array.isArray(l.items) ? l.items.map(normalizeItem) : [],
+          share: l.share && l.share.code ? { code: l.share.code, version: l.share.version || 1, updatedAt: l.share.updatedAt || Date.now() } : null,
+        }));
+        if (!parsed.lists.some(l => l.id === parsed.currentListId)) parsed.currentListId = parsed.lists[0].id;
+        return parsed;
+      }
+    }
+  } catch(e) { console.error("불러오기 실패", e); }
+
+  // 첫 실행 — 저장된 것이 없거나 읽다가 깨졌을 때
+  const list = { id: uid(), name: "기본 리스트", items: seedDemoItems(), share: null };
+  return { lists: [list], currentListId: list.id };
+}
+/**
+ * 저장에 실패했는가. 저장소가 가득 차면 `setItem`이 던지는데, 예전에는 그걸 삼켜서
+ * **화면에는 항목이 보이는데 새로고침하면 없는** 상태가 됐다. 사용자는 적은 것을
+ * 잃고도 왜 잃었는지 몰랐다(2026-09-12 실측). 이제 그 사실을 화면에 남긴다.
+ */
+let saveFailed = false;
+function saveStore(){
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+    saveFailed = false;
+  } catch(e) {
+    console.error("저장 실패", e);
+    saveFailed = true;
+  }
+}
+
+/* ---------- 다른 탭의 변경을 잃지 않기 ----------
+ * 모달이 열려 있는 동안에는 다른 탭의 저장을 화면에 바로 반영하지 않는다 — 편집 중인
+ * 화면을 밀어내지 않으려는 것이고, 그 자체는 의도된 동작이다. 문제는 그 다음이었다:
+ * 그 상태에서 이쪽이 저장하면 **낡은 메모리 상태를 통째로 덮어써서** 그 사이 다른 탭이
+ * 넣은 변경이 조용히 사라졌다(2026-09-06 발견, R1). 두 탭을 띄우고 한쪽에서 모달을 연
+ * 채 다른 쪽을 만지면 재현된다.
+ *
+ * 그래서 반영을 "건너뛰는" 대신 **미루기만** 한다. 아래 플래그를 세워 두고, 이쪽이
+ * 저장을 일으키는 바로 그 순간에 먼저 다시 읽어 그 위에 내 변경을 얹는다.
+ * 저장을 일으키는 모든 변경은 commit()을 거친다.
+ */
+let pendingExternal = false;   // 다른 탭이 저장했는데 아직 이 탭에 반영하지 못한 변경이 있는가
+
+function adoptExternalChanges(){
+  store = loadStore();
+  if (!findList(store.currentListId)) store.currentListId = store.lists[0].id;
+  pendingExternal = false;
+}
+
+// apply()는 **호출 시점의 store를 다시 찾아** 동작해야 한다. commit()이 그 직전에
+// store를 통째로 갈아끼울 수 있기 때문이다 — 바깥에서 미리 잡아 둔 list/item 참조는
+// 그때 낡은 것이 된다. 그래서 아래 호출부들은 전부 id로 다시 찾는다.
+function commit(apply){
+  if (pendingExternal) adoptExternalChanges();
+  const out = apply();
+  saveStore();
+  return out;
+}
+
+let store = loadStore();
+let tab = "list";
+let modal = null; // { type: 'switcher'|'settings'|'detail'|'conflict'|'roomJoin', ... }
+let switcherNewName = "";
+let switcherJoinCode = "";
+let shareBusy = false;
+let shareError = "";
+let joinError = "";
+let remindError = "";
+let searchQuery = "";      // 현재 탭의 목록 필터(비어 있으면 필터 없음)
+let detailDraft = "";      // 상세 모달에서 편집 중인 항목 텍스트
+let detailError = "";
+let importError = "";
+
+// 공유 동기화 관련 인메모리(비영속) 상태 — 새로고침하면 초기화돼도 무방
+const syncTimers = {};      // listId -> timeoutId (디바운스 push)
+const pendingPush = {};     // listId -> bool (아직 서버에 반영 안 된 로컬 변경이 있는지)
+/**
+ * listId -> bool. **서버에 올리거나 받아오지 못했는가.**
+ * 재시도 설계는 맞다(입력 흐름을 막지 않는다). 문제는 그동안 상태가 안 보였던 것이다 —
+ * 망이 끊긴 채로 계속 적으면 헤더에는 "🔗 공유 중"이 그대로 떠 있는데 상대에게는
+ * 아무것도 가지 않았다. 사용자는 동기화되고 있다고 믿는다(2026-09-13 총괄 지시 큐 2).
+ */
+const syncFailed = {};
+let notifPermissionAsked = false;
+
+function getCurrentList(){
+  return store.lists.find(l => l.id === store.currentListId) || store.lists[0];
+}
+function findList(id){ return store.lists.find(l => l.id === id); }
+
+/* ---------- 기본 CRUD (항상 즉시 localStorage 반영, 네트워크는 뒤에서만) ---------- */
+
+function markDirtyAndSync(list){
+  if (!list.share) return; // 공유 안 쓰는 리스트는 네트워크 요청 전혀 없음
+  // store가 통째로 갈릴 수 있으므로(commit/adoptExternalChanges) 객체가 아니라 id를
+  // 붙들고, 보낼 때 다시 찾는다. 안 그러면 store에서 떨어져 나온 낡은 사본을 올린다.
+  const listId = list.id;
+  pendingPush[listId] = true;
+  if (syncTimers[listId]) clearTimeout(syncTimers[listId]);
+  syncTimers[listId] = setTimeout(() => {
+    const fresh = findList(listId);
+    if (fresh) pushList(fresh);
+  }, SYNC_DEBOUNCE_MS);
+}
+
+function setTab(t){ tab = t; searchQuery = ""; render(); }
+
+function addItem(){
+  const el = document.getElementById("todo-input");
+  const text = el.value.trim();
+  if(!text) return;
+  const listId = getCurrentList().id;
+  commit(() => {
+    const list = findList(listId) || getCurrentList();
+    list.items.push({ id: uid(), text, completedAt: null, createdAt: Date.now(), priority: false, remindAt: null, notified: false });
+  });
+  el.value = "";
+  render();
+  const list = findList(listId);
+  if (list) markDirtyAndSync(list);
+  const refocus = document.getElementById("todo-input");
+  if (refocus) refocus.focus();
+}
+function complete(id){
+  const listId = getCurrentList().id;
+  commit(() => {
+    const list = findList(listId) || getCurrentList();
+    list.items = list.items.map(i => i.id===id ? {...i, completedAt: Date.now()} : i);
+  });
+  render();
+  const list = findList(listId);
+  if (list) markDirtyAndSync(list);
+}
+function restore(id){
+  const listId = getCurrentList().id;
+  commit(() => {
+    const list = findList(listId) || getCurrentList();
+    list.items = list.items.map(i => i.id===id ? {...i, completedAt: null} : i);
+  });
+  render();
+  const list = findList(listId);
+  if (list) markDirtyAndSync(list);
+}
+function removeItem(id){
+  const listId = getCurrentList().id;
+  commit(() => {
+    const list = findList(listId) || getCurrentList();
+    list.items = list.items.filter(i => i.id!==id);
+  });
+  closeModal(); render();
+  const list = findList(listId);
+  if (list) markDirtyAndSync(list);
+}
+
+/* ---------- 항목 삭제 확인 (2026-09-18 QA 반려 — 여기만 확인이 없었다) ----------
+ * 리스트 삭제도 완료 일괄삭제도 확인 모달을 띄우는데, 정작 제일 자주 잘못 누를
+ * 자리인 개별 항목 삭제만 확인 없이 즉시 영구 삭제하고 있었다. 새 패턴을 만들지 않고
+ * `deleteList`·`clearDone`과 같은 확인 모달을 그대로 쓴다 — 앱 안의 모든 삭제가
+ * 같은 모양·같은 동작이어야 이 문제가 되풀이되지 않는다.
+ * 지우는 함수는 `removeItem` 하나뿐이고, 그 호출부는 이 확인 모달 하나뿐이다. */
+
+function askRemoveItem(id, from){
+  const item = getCurrentList().items.find(i => i.id === id);
+  if (!item) return;
+  openModal({ type: "deleteItem", itemId: id, from: from || "list", text: item.text },
+    from === "done" ? ".trash-btn" : null);
+}
+// 그만두면 왔던 자리로 되돌린다 — 상세에서 왔으면 고치던 내용까지 그대로 살아 있어야 한다
+// (detailDraft는 openDetail에서만 비우므로 여기서 건드리지 않는다).
+function cancelRemoveItem(){
+  if (!modal || modal.type !== "deleteItem") return;
+  if (modal.from === "detail") { modal = { type: "detail", itemId: modal.itemId }; render(); return; }
+  closeModal();
+}
+function confirmRemoveItem(){
+  if (!modal || modal.type !== "deleteItem") return;
+  removeItem(modal.itemId);
+}
+
+/* ---------- 완료 항목 일괄 정리 (완료 탭 안에서만 — 입력 흐름과 무관) ---------- */
+
+function askClearDone(){
+  const count = getCurrentList().items.filter(i=>i.completedAt).length;
+  if (count === 0) return;
+  openModal({ type: "clearDone", count }, ".bulk-row button");
+}
+function clearAllDone(){
+  const listId = getCurrentList().id;
+  commit(() => {
+    const list = findList(listId) || getCurrentList();
+    list.items = list.items.filter(i => !i.completedAt);
+  });
+  closeModal(); render();
+  const list = findList(listId);
+  if (list) markDirtyAndSync(list);
+}
+
+/* ---------- 검색 (항목이 많을 때만 목록 위에 나타난다) ---------- */
+
+function onSearchInput(v){ searchQuery = v; render(); }
+function clearSearch(){
+  searchQuery = "";
+  render();
+  const el = document.getElementById("search-input");
+  if (el) el.focus();
+}
+function matchesSearch(item){
+  const q = searchQuery.trim().toLowerCase();
+  if (!q) return true;
+  return item.text.toLowerCase().indexOf(q) !== -1;
+}
+
+/* ---------- 내보내기 / 가져오기 (설정 안 — 브라우저 저장소만 믿지 않게) ---------- */
+
+function exportBackup(){
+  const payload = {
+    app: "todo3s",
+    format: 1,
+    exportedAt: new Date().toISOString(),
+    lists: store.lists.map(l => ({ name: l.name, items: l.items.map(normalizeItem) })),
+  };
+  const d = new Date(), pad = n => String(n).padStart(2,"0");
+  const name = `todo3s-backup-${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}.json`;
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function pickBackupFile(){
+  importError = "";
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+  input.addEventListener("change", () => {
+    const file = input.files && input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => { readBackupText(String(reader.result || "")); };
+    reader.onerror = () => { importError = "파일을 읽지 못했어요."; render(); };
+    reader.readAsText(file);
+  });
+  input.click();
+}
+
+// 백업 파일 모양(우리 내보내기 형식)과 예전 저장소 모양 둘 다 받아준다.
+function parseBackup(text){
+  const parsed = JSON.parse(text);
+  const raw = Array.isArray(parsed) ? parsed
+    : (Array.isArray(parsed && parsed.lists) ? parsed.lists : null);
+  if (!raw) return null;
+  const lists = raw
+    .filter(l => l && typeof l === "object")
+    .map(l => ({
+      name: String(l.name || "가져온 리스트"),
+      items: Array.isArray(l.items) ? l.items.filter(i => i && typeof i === "object" && String(i.text || "").trim()).map(normalizeItem) : [],
+    }));
+  return lists.length > 0 ? lists : null;
+}
+
+function readBackupText(text){
+  let lists = null;
+  try { lists = parseBackup(text); }
+  catch(e) { lists = null; }
+  if (!lists) {
+    importError = "3초할일 백업 파일이 아닌 것 같아요.";
+    render();
+    return;
+  }
+  importError = "";
+  openModal({ type: "importConfirm", lists }, ".icon-btn");
+}
+
+// 지금 있는 것을 덮어쓰지 않고 항상 "새 리스트로 추가"만 한다 — 되돌릴 수 없는 손실을 만들지 않는다.
+// 공유 정보는 일부러 떼어낸다(백업 파일을 열었다고 남의 공유방에 자동으로 들어가지 않게).
+function applyImport(){
+  if (!modal || modal.type !== "importConfirm") return;
+  const incoming = modal.lists;
+  let firstId = null;
+  commit(() => {
+    incoming.forEach(l => {
+      const list = { id: uid(), name: l.name, items: l.items.map(i => ({...i, id: uid()})), share: null };
+      store.lists.push(list);
+      if (!firstId) firstId = list.id;
+    });
+    if (firstId) store.currentListId = firstId;
+  });
+  searchQuery = "";
+  closeModal();
+  render();
+  if (tab === "list") {
+    const el = document.getElementById("todo-input");
+    if (el) el.focus();
+  }
+}
+function togglePriority(id){
+  if (modal && modal.type === "detail" && modal.itemId === id) flushDetailDraft();
+  const listId = getCurrentList().id;
+  commit(() => {
+    const list = findList(listId) || getCurrentList();
+    list.items = list.items.map(i => i.id===id ? {...i, priority: !i.priority} : i);
+  });
+  render();
+  const list = findList(listId);
+  if (list) markDirtyAndSync(list);
+}
+
+/* ---------- 항목 상세 모달 (탭 이후에만 등장 — 입력 흐름을 막지 않음) ---------- */
+
+function openDetail(id){
+  remindError = "";
+  detailError = "";
+  const list = getCurrentList();
+  const item = list.items.find(i => i.id === id);
+  detailDraft = item ? item.text : "";
+  // 상세는 돌아갈 자리를 주지 않는다 — 항목을 지우면 그 자리가 없어진다.
+  // 입력창으로 가는 폴백이 오히려 맞다.
+  openModal({ type: "detail", itemId: id }, null);
+}
+
+/* 항목 텍스트 수정 — 지금까지는 오타 하나를 고치려면 지우고 다시 써야 했다.
+ * 편집 중인 글자는 detailDraft 에 두고 화면은 거기서 그린다. 이 앱은 무엇이든 바뀌면
+ * 모달까지 통째로 다시 그리기 때문에, 항목 텍스트에서 바로 그리면 우선순위를 켜거나
+ * 알림을 설정하는 순간 치던 글자가 날아간다. */
+function onDetailTextInput(v){ detailDraft = v; }
+function flushDetailDraft(){
+  const item = currentDetailItem();
+  if (!item) return false;
+  const next = detailDraft.trim();
+  if (!next || next === item.text) return next === item.text;
+  const listId = getCurrentList().id;
+  const itemId = item.id;
+  commit(() => {
+    const list = findList(listId) || getCurrentList();
+    list.items = list.items.map(i => i.id===itemId ? {...i, text: next} : i);
+  });
+  const list = findList(listId);
+  if (list) markDirtyAndSync(list);
+  return true;
+}
+function saveDetailText(){
+  const item = currentDetailItem();
+  if (!item) return;
+  if (!detailDraft.trim()) { detailError = "내용을 비울 수는 없어요. 지우려면 삭제를 눌러주세요."; render(); return; }
+  detailError = "";
+  flushDetailDraft();
+  closeModal();
+}
+// 닫기/바깥 탭으로 나갈 때도 고친 내용을 조용히 잃지 않게 저장한다(삭제는 저장하지 않음).
+function closeDetail(){
+  if (detailDraft.trim()) flushDetailDraft();
+  closeModal();
+}
+function currentDetailItem(){
+  if (!modal || modal.type !== "detail") return null;
+  const list = getCurrentList();
+  return list.items.find(i => i.id === modal.itemId) || null;
+}
+function setReminderFromInput(){
+  flushDetailDraft();
+  const item = currentDetailItem();
+  if (!item) return;
+  const val = document.getElementById("remind-input").value;
+  const ts = localInputValueToTs(val);
+  if (ts == null) { remindError = "날짜와 시간을 골라주세요."; render(); return; }
+  // 지난 시각을 넣으면 저장되자마자 알림이 울려서 사용자가 왜 울렸는지 알 수 없었다.
+  if (ts <= Date.now()) { remindError = "지난 시각이에요. 앞으로의 시간을 골라주세요."; render(); return; }
+  remindError = "";
+  const listId = getCurrentList().id;
+  const itemId = item.id;
+  commit(() => {
+    const list = findList(listId) || getCurrentList();
+    list.items = list.items.map(i => i.id===itemId ? {...i, remindAt: ts, notified: false} : i);
+  });
+  const list = findList(listId);
+  if (list) markDirtyAndSync(list);
+  if (!notifPermissionAsked && "Notification" in window && Notification.permission === "default") {
+    notifPermissionAsked = true;
+    Notification.requestPermission().catch(()=>{});
+  }
+  render();
+}
+function clearReminder(){
+  const item = currentDetailItem();
+  if (!item) return;
+  const listId = getCurrentList().id;
+  const itemId = item.id;
+  commit(() => {
+    const list = findList(listId) || getCurrentList();
+    list.items = list.items.map(i => i.id===itemId ? {...i, remindAt: null, notified: false} : i);
+  });
+  const list = findList(listId);
+  if (list) markDirtyAndSync(list);
+  render();
+}
+function moveItemToList(targetListId){
+  flushDetailDraft();
+  const item = currentDetailItem();
+  if (!item || !targetListId) return;
+  const fromId = getCurrentList().id;
+  const itemId = item.id;
+  if (!findList(targetListId)) return;
+  const moved = commit(() => {
+    const from = findList(fromId) || getCurrentList();
+    const to = findList(targetListId);
+    if (!to) return false;
+    // 옮길 항목은 **지금 store에서** 다시 찾는다. 바깥에서 잡아 둔 사본을 쓰면
+    // 그 사이 다른 탭이 고친 내용을 되돌려 버린다.
+    const current = from.items.find(i => i.id === itemId) || item;
+    from.items = from.items.filter(i => i.id !== itemId);
+    to.items.push(current);
+    return true;
+  });
+  if (!moved) return;
+  const from = findList(fromId), to = findList(targetListId);
+  if (from) markDirtyAndSync(from);
+  if (to) markDirtyAndSync(to);
+  closeModal();
+  render();
+}
+
+/* ---------- 리스트(다중 페이지) ---------- */
+
+function switchList(id){
+  if (!findList(id)) return;
+  commit(() => {
+    // 다른 탭 변경을 받아들인 뒤에도 이 리스트가 남아 있어야 옮겨 간다.
+    if (findList(id)) store.currentListId = id;
+  });
+  searchQuery = "";
+  closeModal();
+  render();
+  const list = getCurrentList();
+  if (list.share) pullList(list); // 배경에서만, 입력 흐름을 막지 않음
+  if (tab === "list") {
+    const el = document.getElementById("todo-input");
+    if (el) el.focus();
+  }
+}
+function createList(){
+  const name = switcherNewName.trim();
+  if (!name) return;
+  const list = { id: uid(), name, items: [], share: null };
+  commit(() => {
+    store.lists.push(list);
+    store.currentListId = list.id;
+  });
+  switcherNewName = "";
+  searchQuery = "";
+  closeModal();
+  render();
+  if (tab === "list") {
+    const el = document.getElementById("todo-input");
+    if (el) el.focus();
+  }
+}
+function askDeleteList(){
+  if (store.lists.length <= 1) return; // 마지막 리스트는 지울 수 없음
+  const list = getCurrentList();
+  openModal({ type: "deleteList", listName: list.name, count: list.items.length }, ".icon-btn");
+}
+function deleteCurrentList(){
+  if (store.lists.length <= 1) return; // 마지막 리스트는 지울 수 없음
+  // 지울 리스트는 **지금 보고 있는 것**으로 먼저 못 박는다. commit()이 다른 탭 변경을
+  // 받아들이면서 currentListId가 저쪽 것으로 바뀔 수 있어서, 나중에 읽으면 엉뚱한
+  // 리스트를 지우게 된다.
+  const id = store.currentListId;
+  commit(() => {
+    if (store.lists.length <= 1 || !findList(id)) return;
+    store.lists = store.lists.filter(l => l.id !== id);
+    if (!findList(store.currentListId)) store.currentListId = store.lists[0].id;
+  });
+  searchQuery = "";
+  delete syncTimers[id];
+  delete pendingPush[id];
+  closeModal();
+  render();
+}
+function onSwitcherNewNameInput(v){ switcherNewName = v; }
+function onSwitcherJoinCodeInput(v){ switcherJoinCode = v; }
+
+async function joinRoomByCode(codeArg){
+  const code = (codeArg != null ? codeArg : switcherJoinCode).trim().toUpperCase();
+  if (!code) return;
+  // 형식부터 확인한다. 예전엔 짧거나 이상한 코드도 그대로 서버에 보내서, 실제로는
+  // 오타인데 "네트워크 오류로 참가하지 못했어요"라는 엉뚱한 안내가 떴다.
+  if (!/^[A-Z0-9]{12}$/.test(code)) {
+    joinError = "코드는 영문·숫자 12자예요. 다시 확인해주세요.";
+    render();
+    return;
+  }
+  joinError = "";
+  render();
+  try {
+    const res = await apiFetch(`/rooms/${encodeURIComponent(code)}`);
+    if (!res.ok) {
+      joinError = res.status === 404 ? "그 코드의 공유방을 찾을 수 없어요." : "참가에 실패했어요.";
+      render();
+      return;
+    }
+    const body = await res.json();
+    const data = body.data || { name: "공유 리스트", items: [] };
+    const list = {
+      id: uid(),
+      name: data.name || "공유 리스트",
+      items: Array.isArray(data.items) ? data.items.map(normalizeItem) : [],
+      share: { code: body.code, version: body.version, updatedAt: body.updatedAt },
+    };
+    commit(() => {
+      store.lists.push(list);
+      store.currentListId = list.id;
+    });
+    switcherJoinCode = "";
+    joinError = "";
+    searchQuery = "";
+    closeModal();
+    render();
+    if (tab === "list") {
+      const el = document.getElementById("todo-input");
+      if (el) el.focus();
+    }
+  } catch(e) {
+    joinError = "네트워크 오류로 참가하지 못했어요.";
+    render();
+  }
+}
+
+/* ---------- 공유(실시간 동기화) ---------- */
+
+function openListSettings(){
+  shareBusy = false; shareError = "";
+  openModal({ type: "settings" }, ".icon-btn");
+}
+function openListSwitcher(){
+  switcherNewName = ""; switcherJoinCode = ""; joinError = "";
+  openModal({ type: "switcher" }, ".list-switch-btn");
+}
+/* ---------- 모달 키보드 접근성 ----------
+ * 마우스로는 멀쩡하지만 키보드·스크린리더로는 셋이 빠져 있었다:
+ *   ① 모달이 떠도 Tab이 뒤 화면으로 새어 나간다(스크린리더는 모달 밖을 계속 읽는다)
+ *   ② 닫으면 포커스가 <body>로 떨어져 처음부터 다시 Tab을 눌러야 한다
+ *   ③ Escape로 닫히지 않는다
+ * 다만 충돌·공유 참여 모달은 **고르지 않고 지나칠 수 없게** 만든 것이라
+ * Escape에서 제외한다(바깥 클릭으로도 안 닫힌다 — 같은 이유다).
+ */
+const MODAL_MUST_CHOOSE = ["conflict", "roomJoin"];
+
+// 모달을 연 자리로 돌아가기 위한 선택자. 요소를 붙들 수 없다 —
+// 이 앱은 무엇이든 바뀌면 화면을 통째로 다시 그려서 그 요소가 사라진다.
+let focusBackTo = null;
+
+function openModal(next, restoreSelector){
+  if (!modal) focusBackTo = restoreSelector || null;
+  modal = next;
+  render();
+}
+
+function focusablesIn(root){
+  return [...root.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')]
+    .filter(el => !el.disabled && el.offsetParent !== null);
+}
+
+// 모달을 닫은 뒤 갈 자리: 연 자리로 되돌리되, 그 요소가 사라졌으면 입력창으로 간다
+// (사라지는 경우가 실제로 있다 — 상세에서 항목을 지우면 그 항목이 없다).
+// 입력창으로 가는 폴백은 "열면 바로 커서"라는 이 앱의 전제와도 맞다.
+function restoreFocusAfterModal(){
+  const el = focusBackTo ? document.querySelector(focusBackTo) : null;
+  focusBackTo = null;
+  if (el) { el.focus(); return; }
+  const input = document.getElementById("todo-input");
+  if (input) input.focus();
+}
+
+document.addEventListener("keydown", (e) => {
+  if (!modal) return;
+  const card = document.querySelector("#modal-root .modal-card");
+  if (!card) return;
+
+  if (e.key === "Escape") {
+    if (MODAL_MUST_CHOOSE.indexOf(modal.type) !== -1) return;  // 고르지 않고 지나칠 수 없는 모달
+    e.preventDefault();
+    // 상세는 닫으면서 편집 중인 내용을 저장한다(바깥 클릭과 같은 경로).
+    if (modal.type === "detail") closeDetail();
+    else if (modal.type === "deleteItem") cancelRemoveItem();
+    else closeModal();
+    return;
+  }
+
+  if (e.key !== "Tab") return;
+  const f = focusablesIn(card);
+  if (!f.length) return;
+  const first = f[0], last = f[f.length - 1];
+  if (!card.contains(document.activeElement)) { e.preventDefault(); first.focus(); return; }
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+});
+
+function closeModal(){
+  const wasOpen = !!modal;
+  modal = null;
+  // 모달 때문에 미뤄 둔 다른 탭의 변경이 있으면 여기서 받아들인다.
+  // (이게 없으면 B 화면은 다음 storage 이벤트가 올 때까지 낡은 채로 남는다.)
+  if (pendingExternal) adoptExternalChanges();
+  render();
+  if (wasOpen) restoreFocusAfterModal();
+}
+
+async function enableShare(){
+  const list = getCurrentList();
+  if (list.share || shareBusy) return;
+  shareBusy = true; shareError = "";
+  render();
+  try {
+    const res = await apiFetch(`/rooms`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: { name: list.name, items: list.items } }),
+    });
+    if (!res.ok) throw new Error("create failed");
+    const body = await res.json();
+    const listId = list.id;
+    commit(() => {
+      const l = findList(listId);
+      if (l) l.share = { code: body.code, version: body.version, updatedAt: body.updatedAt };
+    });
+  } catch(e) {
+    shareError = "공유방을 만들지 못했어요. 잠시 후 다시 시도해주세요.";
+  } finally {
+    shareBusy = false;
+    render();
+  }
+}
+function disableShare(){
+  const list = getCurrentList();
+  if (!list.share) return;
+  const listId = list.id;
+  if (syncTimers[listId]) clearTimeout(syncTimers[listId]);
+  delete pendingPush[listId];
+  commit(() => {
+    const l = findList(listId);
+    if (l) l.share = null;
+  });
+  render();
+}
+function shareLinkFor(code){
+  return location.origin + location.pathname + "#room=" + encodeURIComponent(code);
+}
+function fallbackCopy(text){
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.opacity = "0";
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); } catch(e) { /* 무시 */ }
+  document.body.removeChild(ta);
+}
+function copyText(text){
+  if (navigator.clipboard) navigator.clipboard.writeText(text).catch(()=>fallbackCopy(text));
+  else fallbackCopy(text);
+}
+
+/**
+ * 동기화 상태가 바뀌면 **헤더 한 줄만** 고쳐 그린다.
+ * 여기서 render()를 부르면 안 된다 — 30초 폴링과 디바운스 push가 도는 자리라,
+ * 화면을 통째로 다시 그리면 리스트 전환 직후의 입력창 포커스를 빼앗는다
+ * (2026-09-13에 실제로 `(n)` 검사가 그걸 잡았다). 바뀌는 것은 글자 한 줄뿐이다.
+ */
+/**
+ * 헤더 두 번째 줄. 공유 중일 때 **올라갔는지까지** 말해 준다 — "공유 중"만 보여 주면
+ * 망이 끊긴 채로도 동기화되는 줄 안다. render()와 paintHeaderSub()가 이 하나를 쓴다.
+ */
+function headerSubText(){
+  const list = getCurrentList();
+  if (tab !== "list") return `완료 ${list.items.filter(i=>i.completedAt).length}개`;
+  const active = list.items.filter(i=>!i.completedAt).length;
+  const share = !list.share ? ""
+    : (syncFailed[list.id] ? " · ⚠ 동기화 안 됨(다시 시도 중)" : " · 🔗 공유 중");
+  return `할 일 ${active}개${share}`;
+}
+
+function paintHeaderSub(){
+  const el = document.querySelector(".header p");
+  if (el) el.textContent = headerSubText();
+}
+function markSyncFailed(listId){
+  if (syncFailed[listId]) return;
+  syncFailed[listId] = true;
+  paintHeaderSub();
+}
+function markSyncOk(listId){
+  if (!syncFailed[listId]) return;
+  syncFailed[listId] = false;
+  paintHeaderSub();
+}
+
+async function pushList(list){
+  if (!list.share) return;
+  try {
+    const res = await apiFetch(`/rooms/${encodeURIComponent(list.share.code)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        data: { name: list.name, items: list.items },
+        expectedVersion: list.share.version,
+      }),
+    });
+    if (res.status === 409) {
+      const body = await res.json();
+      modal = { type: "conflict", listId: list.id, remote: { data: body.data, version: body.version, updatedAt: body.updatedAt } };
+      render();
+      return;
+    }
+    if (!res.ok) { markSyncFailed(list.id); return; } // 재시도는 그대로 — 다만 조용히 하지 않는다
+    const body = await res.json();
+    const listId = list.id;
+    pendingPush[listId] = false;
+    markSyncOk(listId);
+    commit(() => {
+      const l = findList(listId);
+      if (l && l.share) { l.share.version = body.version; l.share.updatedAt = body.updatedAt; }
+    });
+  } catch(e) {
+    // 네트워크 오류 — 다음 변경/폴링 때 다시 시도한다. 다만 그 사실을 화면에 남긴다.
+    markSyncFailed(list.id);
+  }
+}
+
+async function pullList(list){
+  if (!list.share) return;
+  try {
+    const res = await apiFetch(`/rooms/${encodeURIComponent(list.share.code)}`);
+    if (!res.ok) { markSyncFailed(list.id); return; }
+    markSyncOk(list.id);   // 받아오는 쪽이 되면 동기화가 살아 있는 것이다
+    const body = await res.json();
+    if (body.version === list.share.version) return; // 변경 없음
+    if (body.version < list.share.version) return; // 서버가 뒤로 갈 일은 없음(방어)
+
+    if (pendingPush[list.id]) {
+      // 내가 아직 안 올린 로컬 변경이 있는데 서버도 그 사이 바뀌었다 — 조용히 덮어쓰지 않고
+      // 기존 "가져오기 확인" 모달 패턴을 재사용해 사용자가 고르게 한다.
+      modal = { type: "conflict", listId: list.id, remote: { data: body.data, version: body.version, updatedAt: body.updatedAt } };
+      render();
+      return;
+    }
+    // 로컬에 아직 반영 안 된 변경이 없으면, 다른 기기가 보낸 최신 내용을 그대로 반영.
+    const data = body.data || { name: list.name, items: [] };
+    const listId = list.id;
+    commit(() => {
+      const l = findList(listId);
+      if (!l) return;
+      l.name = data.name || l.name;
+      l.items = Array.isArray(data.items) ? data.items.map(normalizeItem) : l.items;
+      if (l.share) { l.share.version = body.version; l.share.updatedAt = body.updatedAt; }
+    });
+    render();
+  } catch(e) {
+    // 네트워크 오류 — 다음 폴링 때 다시 시도한다. 다만 그 사실을 화면에 남긴다.
+    markSyncFailed(list.id);
+  }
+}
+
+async function resolveConflictAcceptRemote(){
+  if (!modal || modal.type !== "conflict") return;
+  const list = findList(modal.listId);
+  if (!list) { closeModal(); return; }
+  const listId = list.id;
+  const data = modal.remote.data || { name: list.name, items: [] };
+  const remote = modal.remote;
+  pendingPush[listId] = false;
+  if (syncTimers[listId]) clearTimeout(syncTimers[listId]);
+  commit(() => {
+    const l = findList(listId);
+    if (!l) return;
+    l.name = data.name || l.name;
+    l.items = Array.isArray(data.items) ? data.items.map(normalizeItem) : [];
+    if (l.share) { l.share.version = remote.version; l.share.updatedAt = remote.updatedAt; }
+  });
+  closeModal();
+}
+async function resolveConflictKeepLocal(){
+  if (!modal || modal.type !== "conflict") return;
+  const list = findList(modal.listId);
+  if (!list) { closeModal(); return; }
+  try {
+    const res = await apiFetch(`/rooms/${encodeURIComponent(list.share.code)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ data: { name: list.name, items: list.items }, force: true }),
+    });
+    if (res.ok) {
+      const body = await res.json();
+      const listId = list.id;
+      pendingPush[listId] = false;
+      commit(() => {
+        const l = findList(listId);
+        if (l && l.share) { l.share.version = body.version; l.share.updatedAt = body.updatedAt; }
+      });
+    }
+  } catch(e) { /* 무시 — 다음 동기화 때 재시도 */ }
+  closeModal();
+}
+
+/* ---------- 공유 링크(#room=코드)로 열었을 때 — 참여 확인 모달 ---------- */
+
+function checkForSharedRoomHash(){
+  const hash = location.hash;
+  if (!hash || hash.indexOf("#room=") !== 0) return;
+  const code = decodeURIComponent(hash.slice(6)).trim().toUpperCase();
+  try { history.replaceState(null, "", location.pathname + location.search); } catch(e) { /* 무시 */ }
+  if (!code) return;
+  // 이미 이 코드로 참여 중인 리스트가 있으면 새로 만들지 않고 그 리스트로 이동만 한다.
+  const already = store.lists.find(l => l.share && l.share.code === code);
+  if (already) { switchList(already.id); return; }
+
+  apiFetch(`/rooms/${encodeURIComponent(code)}`)
+    .then(res => res.ok ? res.json() : Promise.reject(new Error(String(res.status))))
+    .then(body => {
+      modal = { type: "roomJoin", code, body };
+      render();
+    })
+    .catch(() => {
+      modal = { type: "roomJoin", code, error: true };
+      render();
+    });
+}
+function acceptRoomJoin(){
+  if (!modal || modal.type !== "roomJoin" || !modal.body) return;
+  const body = modal.body;
+  const data = body.data || { name: "공유 리스트", items: [] };
+  const list = {
+    id: uid(),
+    name: data.name || "공유 리스트",
+    items: Array.isArray(data.items) ? data.items.map(normalizeItem) : [],
+    share: { code: body.code, version: body.version, updatedAt: body.updatedAt },
+  };
+  commit(() => {
+    store.lists.push(list);
+    store.currentListId = list.id;
+  });
+  searchQuery = "";
+  closeModal();
+  render();
+}
+function declineRoomJoin(){ closeModal(); }
+
+/* ---------- 알림(리마인더) — 항목 추가 시점엔 절대 관여하지 않음 ---------- */
+
+/**
+ * 알림을 실제로 띄울 수 있는 상태인가. `checkReminders()`가 돌아서는 조건과 **같은 것**을 본다 —
+ * 두 곳이 어긋나면 "안내는 없는데 알림도 안 오는" 최악이 된다.
+ * 리마인더를 걸면 칩이 붙어서 사용자는 설정됐다고 믿는다. 권한이 없으면 그 믿음이 틀린 것이므로
+ * 상세 화면에서 그 사실을 말해 준다(2026-09-12 총괄 지시).
+ */
+function notificationsUsable(){
+  return ("Notification" in window) && Notification.permission === "granted";
+}
+
+function fireNotification(item, listName){
+  // 리마인더 확인은 30초 타이머라 모달이 열린 채로도 돈다 — 여기서 통째로 저장하면
+  // 그 사이 다른 탭이 넣은 변경이 사라진다(R1과 같은 경로).
+  const itemId = item.id;
+  item.notified = true;
+  commit(() => {
+    store.lists.forEach(l => {
+      l.items = l.items.map(i => i.id === itemId ? {...i, notified: true} : i);
+    });
+  });
+  const title = "3초할일 알림";
+  const body = (listName ? `[${listName}] ` : "") + item.text;
+  const opts = { body, icon: "icons/icon-192.png", tag: "todo3s-" + item.id };
+  // 래퍼에는 서비스워커가 없다. navigator.serviceWorker.ready는 Promise라 항상 참이고
+  // 등록이 없으면 영영 resolve되지 않아 .catch 폴백도 돌지 않는다 — 알림이 조용히 사라진다.
+  // 그래서 래퍼에서는 아래 Notification 분기로 곧장 보낸다. 웹 조건식은 그대로다.
+  if (!isTauriRuntime() && "serviceWorker" in navigator && navigator.serviceWorker.ready) {
+    navigator.serviceWorker.ready.then(reg => reg.showNotification(title, opts)).catch(() => {
+      try { new Notification(title, opts); } catch(e) { /* 무시 */ }
+    });
+  } else if ("Notification" in window) {
+    try { new Notification(title, opts); } catch(e) { /* 무시 */ }
+  }
+}
+function checkReminders(){
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const now = Date.now();
+  let changed = false;
+  store.lists.forEach(list => {
+    list.items.forEach(item => {
+      if (item.remindAt && !item.notified && !item.completedAt && item.remindAt <= now) {
+        fireNotification(item, list.name);
+        changed = true;
+      }
+    });
+  });
+  if (changed) render();
+}
+
+/* ---------- 렌더 ---------- */
+
+function renderItemCard(item, isDone){
+  const star = !isDone ? `<button class="star-btn ${item.priority?'on':''}" onclick="event.stopPropagation();togglePriority('${item.id}')" title="우선순위" aria-pressed="${item.priority?'true':'false'}" aria-label="우선순위: ${escapeHtml(item.text)}">${item.priority?'★':'☆'}</button>` : "";
+  const remindChip = item.remindAt ? `<span class="remind-chip">⏰ ${formatRemind(item.remindAt)}${item.notified ? " · 알림됨" : ""}</span>` : "";
+  const meta = (!isDone && remindChip) ? `<div class="item-meta">${remindChip}</div>` : "";
+  if (isDone) {
+    return `
+      <div class="item-card done">
+        <button class="checkbox checked" onclick="restore('${item.id}')" aria-label="완료 취소: ${escapeHtml(item.text)}">✓</button>
+        <div style="flex:1;">
+          <div class="item-text done">${escapeHtml(item.text)}</div>
+        </div>
+        <button class="trash-btn" onclick="askRemoveItem('${item.id}','done')" aria-label="삭제: ${escapeHtml(item.text)}">✕</button>
+      </div>`;
+  }
+  return `
+    <div class="item-card ${item.priority?'priority':''}">
+      <button class="checkbox" onclick="complete('${item.id}')" aria-label="완료로 표시: ${escapeHtml(item.text)}"></button>
+      <div style="flex:1;">
+        <div class="item-text" role="button" tabindex="0" onclick="openDetail('${item.id}')" onkeydown="activateOnKey(event, () => openDetail('${item.id}'))" aria-label="자세히 보기: ${escapeHtml(item.text)}">${escapeHtml(item.text)}</div>
+        ${meta}
+      </div>
+      ${star}
+    </div>`;
+}
+
+function render(){
+  const list = getCurrentList();
+  const activeItems = list.items.filter(i=>!i.completedAt).sort((a,b)=> (b.priority - a.priority) || (b.createdAt-a.createdAt));
+  const doneItems = list.items.filter(i=>i.completedAt).sort((a,b)=>b.completedAt-a.completedAt);
+
+  // 검색은 이 탭에 쌓인 항목이 SEARCH_MIN_ITEMS 이상일 때만 나타난다. 이미 검색어를 친
+  // 상태라면(필터 때문에 개수가 줄어도) 검색창이 눈앞에서 사라지지 않게 계속 보여준다.
+  const tabTotal = tab === "done" ? doneItems.length : activeItems.length;
+  const showSearch = tabTotal >= SEARCH_MIN_ITEMS || searchQuery.trim().length > 0;
+  const q = searchQuery.trim();
+  const visibleActive = q ? activeItems.filter(matchesSearch) : activeItems;
+  const visibleDone = q ? doneItems.filter(matchesSearch) : doneItems;
+  const shown = tab === "done" ? visibleDone.length : visibleActive.length;
+
+  const doneGroups = {};
+  visibleDone.forEach(i=>{ const l = todayLabel(i.completedAt); (doneGroups[l] = doneGroups[l]||[]).push(i); });
+
+  const searchHtml = showSearch ? `
+    <div class="search-row">
+      <span class="sr-icon">🔍</span>
+      <input id="search-input" placeholder="이 리스트에서 찾기" aria-label="이 리스트에서 찾기" value="${escapeHtml(searchQuery)}" oninput="onSearchInput(this.value)" onkeydown="if(event.key==='Escape') clearSearch()" />
+      ${q ? `<button class="sr-clear" onclick="clearSearch()" aria-label="검색어 지우기">✕</button>` : ""}
+    </div>
+    ${q ? `<div class="search-count" aria-live="polite">${shown}개 찾음 / 전체 ${tabTotal}개</div>` : ""}` : "";
+
+  let contentHtml = "";
+  if(tab === "list"){
+    const body = activeItems.length===0
+      ? `<div class="empty"><div class="t1">할 일이 없어요.</div><div class="t2">아래 입력창에 새 항목을 적어보세요.</div></div>`
+      : (visibleActive.length===0
+          ? `<div class="empty"><div class="t1">찾는 항목이 없어요.</div><div class="t2">다른 말로 찾아보세요.</div></div>`
+          : visibleActive.map(item => renderItemCard(item, false)).join(""));
+    contentHtml = searchHtml + body;
+  } else if(tab === "done"){
+    if(doneItems.length===0){
+      contentHtml = `<div class="empty"><div class="t1">아직 완료한 항목이 없어요.</div></div>`;
+    } else if(visibleDone.length===0){
+      contentHtml = searchHtml + `<div class="empty"><div class="t1">찾는 항목이 없어요.</div><div class="t2">다른 말로 찾아보세요.</div></div>`;
+    } else {
+      contentHtml = searchHtml + Object.entries(doneGroups).map(([label, group]) => `
+        <div class="group-label">${label}</div>
+        ${group.map(item => renderItemCard(item, true)).join("")}
+      `).join("")
+      + `<div class="footer-hint">체크를 다시 누르면 리스트로 돌아가요</div>`
+      + `<div class="bulk-row"><button onclick="askClearDone()">완료 ${doneItems.length}개 모두 지우기</button></div>`;
+    }
+  }
+
+  const headerSub = headerSubText();
+
+  // 이 앱은 무엇이든 바뀌면 화면 전체를 다시 그린다. 그래서 새 항목을 치던 도중에
+  // 다른 항목의 별을 누르거나 체크를 하면 입력창이 새로 만들어지면서 치던 글자와
+  // 커서 위치가 통째로 사라졌다. 다시 그리기 전에 붙잡아 두었다가 되돌려 놓는다.
+  const prevInput = document.getElementById("todo-input");
+  const preserved = prevInput ? {
+    value: prevInput.value,
+    start: prevInput.selectionStart,
+    end: prevInput.selectionEnd,
+    focused: document.activeElement === prevInput,
+  } : null;
+
+  // 검색창·상세 편집창도 같은 이유로 커서를 붙잡아 둔다(값 자체는 상태에서 다시 그려진다).
+  const prevSearch = document.getElementById("search-input");
+  const searchPreserved = prevSearch ? {
+    start: prevSearch.selectionStart, end: prevSearch.selectionEnd,
+    focused: document.activeElement === prevSearch,
+  } : null;
+  const prevDetail = document.getElementById("detail-text");
+  const detailPreserved = prevDetail ? {
+    start: prevDetail.selectionStart, end: prevDetail.selectionEnd,
+    focused: document.activeElement === prevDetail,
+  } : null;
+
+  document.getElementById("app").innerHTML = `
+    <div class="header">
+      <div class="header-top">
+        <button class="list-switch-btn" onclick="openListSwitcher()" aria-label="리스트 전환">
+          <span class="lsb-name display">${escapeHtml(list.name)}</span>
+          <span class="lsb-caret">▾</span>
+        </button>
+        <button class="icon-btn ${list.share?'on':''}" onclick="openListSettings()" title="리스트 설정" aria-label="리스트 설정">${list.share ? "🔗" : "⚙"}</button>
+      </div>
+      <p>${headerSub}</p>
+    </div>
+    ${saveFailed ? `<div class="save-failed" role="alert">저장 공간이 가득 차서 <b>방금 적은 것이 저장되지 않았어요.</b> 완료한 항목을 지우거나, 설정에서 백업을 내보낸 뒤 정리해주세요.</div>` : ""}
+    <div class="content">${contentHtml}</div>
+    ${tab==="list" ? `
+      <div class="input-bar">
+        <div class="input-wrap">
+          <input id="todo-input" placeholder="새 항목" aria-label="새 항목 입력" onkeydown="if(event.key==='Enter') addItem()" />
+          <button class="send-btn" id="send-btn" onclick="addItem()" aria-label="추가">➤</button>
+        </div>
+      </div>` : ""}
+    <div class="tabbar">
+      <button class="tab-btn ${tab==='list'?'active':''}" onclick="setTab('list')" aria-current="${tab==='list'?'true':'false'}">리스트</button>
+      <button class="tab-btn ${tab==='done'?'active':''}" onclick="setTab('done')" aria-current="${tab==='done'?'true':'false'}">완료${doneItems.length>0?`<span class="badge">${doneItems.length}</span>`:""}</button>
+    </div>
+  `;
+
+  if(tab==="list"){
+    const inputEl = document.getElementById("todo-input");
+    const sendBtn = document.getElementById("send-btn");
+    inputEl.addEventListener("input", () => {
+      sendBtn.classList.toggle("active", inputEl.value.trim().length>0);
+    });
+    if (preserved && preserved.value) {
+      inputEl.value = preserved.value;
+      sendBtn.classList.toggle("active", preserved.value.trim().length>0);
+      if (preserved.focused) {
+        inputEl.focus();
+        try { inputEl.setSelectionRange(preserved.start, preserved.end); } catch(e) { /* 브라우저가 막으면 그냥 끝으로 */ }
+      }
+    }
+  }
+
+  if (searchPreserved && searchPreserved.focused) {
+    const el = document.getElementById("search-input");
+    if (el) {
+      el.focus();
+      try { el.setSelectionRange(searchPreserved.start, searchPreserved.end); } catch(e) { /* 무시 */ }
+    }
+  }
+
+  renderModal();
+
+  if (detailPreserved && detailPreserved.focused) {
+    const el = document.getElementById("detail-text");
+    if (el) {
+      el.focus();
+      try { el.setSelectionRange(detailPreserved.start, detailPreserved.end); } catch(e) { /* 무시 */ }
+    }
+  }
+
+  // 검색창을 쓰고 있는 동안에는 입력창이 포커스를 뺏어가지 않아야 한다.
+  if (!initialFocusDone && tab === "list" && !(searchPreserved && searchPreserved.focused)) {
+    const el = document.getElementById("todo-input");
+    if (el) { el.focus(); initialFocusDone = true; }
+  }
+}
+
+function renderModal(){
+  const root = document.getElementById("modal-root");
+  if (!modal) { root.innerHTML = ""; return; }
+
+  if (modal.type === "switcher") {
+    const rows = store.lists.map(l => `
+      <div class="list-row ${l.id===store.currentListId?'current':''}" role="button" tabindex="0" onclick="switchList('${l.id}')" onkeydown="activateOnKey(event, () => switchList('${l.id}'))">
+        <span class="lr-name">${escapeHtml(l.name)}${l.share ? " 🔗" : ""}</span>
+        <span class="lr-count">${l.items.filter(i=>!i.completedAt).length}개</span>
+      </div>`).join("");
+    root.innerHTML = `
+      <div class="modal-backdrop open" onclick="if(event.target===this) closeModal()">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div class="modal-head" id="modal-title">리스트</div>
+          <div style="padding-top:8px;">${rows}</div>
+          <div class="divider"></div>
+          <div class="field-label">새 리스트 만들기</div>
+          <div class="field-row">
+            <input class="field-input" id="new-list-name" placeholder="리스트 이름" aria-label="새 리스트 이름" value="${escapeHtml(switcherNewName)}" oninput="onSwitcherNewNameInput(this.value)" onkeydown="if(event.key==='Enter') createList()" />
+            <button onclick="createList()">만들기</button>
+          </div>
+          <div class="field-label">공유 코드로 참가하기</div>
+          <div class="field-row">
+            <input class="field-input" id="join-code" placeholder="예: AB12CD34EFGH" aria-label="공유 코드" value="${escapeHtml(switcherJoinCode)}" oninput="onSwitcherJoinCodeInput(this.value.toUpperCase())" onkeydown="if(event.key==='Enter') joinRoomByCode()" style="text-transform:uppercase;" />
+            <button onclick="joinRoomByCode()">참가</button>
+          </div>
+          ${joinError ? `<div class="err-text" role="alert">${escapeHtml(joinError)}</div>` : ""}
+          <div class="modal-actions"><button class="btn-ghost" onclick="closeModal()">닫기</button></div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  if (modal.type === "settings") {
+    const list = getCurrentList();
+    const canDelete = store.lists.length > 1;
+    const shareBlock = list.share ? `
+      <div class="section-title">공유</div>
+      <div class="share-status">
+        <div class="ss-code">${escapeHtml(list.share.code)}</div>
+        <div class="ss-hint">이 코드(또는 링크)를 아는 사람은 누구나 이 리스트를 읽고 쓸 수 있어요. 인원 제한은 없어요.<br>1년 동안 아무도 수정하지 않으면 공유방은 자동으로 정리돼요.</div>
+        <div class="copy-row">
+          <button onclick="copyText('${escapeHtml(list.share.code)}')">코드 복사</button>
+          <button class="ghost" onclick="copyText('${escapeHtml(shareLinkFor(list.share.code))}')">링크 복사</button>
+        </div>
+      </div>
+      <div class="toggle-row">
+        <div><div class="tr-text">공유 끄기</div><div class="tr-sub">내 기기는 더 이상 동기화하지 않아요(공유방 자체는 남아요)</div></div>
+        <button class="switch on" onclick="disableShare()" aria-pressed="true" aria-label="공유 끄기"><span class="knob"></span></button>
+      </div>
+    ` : `
+      <div class="section-title">공유</div>
+      <div class="toggle-row">
+        <div><div class="tr-text">이 리스트 공유하기</div><div class="tr-sub">방 코드를 만들어 다른 사람과 실시간으로 같이 써요</div></div>
+        <button class="switch" onclick="enableShare()" aria-pressed="false" aria-label="공유 켜기" ${shareBusy?'disabled':''}><span class="knob"></span></button>
+      </div>
+      ${shareBusy ? `<div class="busy-text">공유방 만드는 중…</div>` : ""}
+      ${shareError ? `<div class="err-text" role="alert">${escapeHtml(shareError)}</div>` : ""}
+    `;
+    root.innerHTML = `
+      <div class="modal-backdrop open" onclick="if(event.target===this) closeModal()">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div class="modal-head" id="modal-title">${escapeHtml(list.name)}</div>
+          ${shareBlock}
+          <div class="section-title">백업</div>
+          <div class="backup-row">
+            <button onclick="exportBackup()">내보내기</button>
+            <button onclick="pickBackupFile()">가져오기</button>
+          </div>
+          <div class="hint-text">내보내기는 모든 리스트를 파일 하나로 저장해요. 가져오기는 지금 있는 리스트를 덮어쓰지 않고 새 리스트로 추가만 해요.</div>
+          ${importError ? `<div class="err-text" role="alert">${escapeHtml(importError)}</div>` : ""}
+          <div class="modal-actions">
+            ${canDelete ? `<button class="btn-danger" onclick="askDeleteList()">리스트 삭제</button>` : ""}
+            <button class="btn-primary" onclick="closeModal()">닫기</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  if (modal.type === "detail") {
+    const item = currentDetailItem();
+    if (!item) { root.innerHTML = ""; return; }
+    const list = getCurrentList();
+    const others = store.lists.filter(l => l.id !== list.id);
+    const moveBlock = others.length > 0 ? `
+      <div class="field-label">다른 리스트로 옮기기</div>
+      <div class="field-row">
+        <select class="field-input" id="move-target">
+          ${others.map(l => `<option value="${l.id}">${escapeHtml(l.name)}</option>`).join("")}
+        </select>
+        <button onclick="moveItemToList(document.getElementById('move-target').value)">이동</button>
+      </div>
+    ` : `<div class="move-list-empty">옮길 다른 리스트가 아직 없어요.</div>`;
+    root.innerHTML = `
+      <div class="modal-backdrop open" onclick="if(event.target===this) closeDetail()">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div class="modal-head" id="modal-title">항목</div>
+          <textarea class="detail-edit" id="detail-text" rows="3" placeholder="내용" oninput="onDetailTextInput(this.value)">${escapeHtml(detailDraft)}</textarea>
+          ${detailError ? `<div class="err-text" role="alert">${escapeHtml(detailError)}</div>` : `<div class="hint-text">내용을 고치면 닫을 때 저장돼요.</div>`}
+          <div class="toggle-row">
+            <div class="tr-text">우선순위</div>
+            <button class="switch ${item.priority?'on':''}" onclick="togglePriority('${item.id}')" aria-pressed="${item.priority?'true':'false'}" aria-label="우선순위 토글"><span class="knob"></span></button>
+          </div>
+          <div class="field-label">알림</div>
+          <div class="field-row">
+            <input class="field-input" type="datetime-local" id="remind-input" aria-label="알림 시각" value="${item.remindAt ? tsToLocalInputValue(item.remindAt) : ''}" />
+            <button onclick="setReminderFromInput()">설정</button>
+          </div>
+          ${remindError ? `<div class="err-text" role="alert">${escapeHtml(remindError)}</div>` : ""}
+          ${item.remindAt && !notificationsUsable() ? `<div class="notif-blocked" role="status">이 기기에서 <b>알림이 꺼져 있어요.</b> 시각이 되어도 알림이 뜨지 않아요 — 브라우저·기기 설정에서 이 앱의 알림을 허용해주세요.</div>` : ""}
+          ${item.remindAt ? `<div style="margin:8px 20px 0;"><button class="btn-ghost" style="border:none;border-radius:10px;padding:6px 12px;font-size:12px;background:#F4F2EA;color:#5B5A52;cursor:pointer;" onclick="clearReminder()">알림 해제</button></div>` : ""}
+          ${moveBlock}
+          <div class="modal-actions">
+            <button class="btn-danger-quiet" onclick="askRemoveItem('${item.id}','detail')">삭제</button>
+            <button class="btn-primary" onclick="saveDetailText()">저장</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  if (modal.type === "deleteItem") {
+    // 다른 탭에서 먼저 지웠을 수 있다 — 그 경우 확인 모달을 붙들고 있을 이유가 없다.
+    const target = getCurrentList().items.find(i => i.id === modal.itemId);
+    const label = target ? target.text : modal.text;
+    root.innerHTML = `
+      <div class="modal-backdrop open" onclick="if(event.target===this) cancelRemoveItem()">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div class="modal-head" id="modal-title">이 항목을 삭제할까요?</div>
+          <div class="modal-body">'${escapeHtml(label)}'<br><span style="color:#74736B;font-size:12px;">되돌릴 수 없어요.</span></div>
+          <div class="modal-actions">
+            <button class="btn-ghost" onclick="cancelRemoveItem()">그만두기</button>
+            <button class="btn-danger" onclick="confirmRemoveItem()">삭제</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  if (modal.type === "clearDone") {
+    root.innerHTML = `
+      <div class="modal-backdrop open" onclick="if(event.target===this) closeModal()">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div class="modal-head" id="modal-title">완료 항목을 모두 지울까요?</div>
+          <div class="modal-body">완료한 ${modal.count}개를 이 리스트에서 지워요. 되돌릴 수 없어요.<br><span style="color:#74736B;font-size:12px;">아직 안 끝난 항목은 그대로 남아요.</span></div>
+          <div class="modal-actions">
+            <button class="btn-ghost" onclick="closeModal()">그만두기</button>
+            <button class="btn-danger" onclick="clearAllDone()">모두 지우기</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  if (modal.type === "deleteList") {
+    root.innerHTML = `
+      <div class="modal-backdrop open" onclick="if(event.target===this) closeModal()">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div class="modal-head" id="modal-title">'${escapeHtml(modal.listName)}' 리스트를 삭제할까요?</div>
+          <div class="modal-body">항목 ${modal.count}개가 함께 지워져요.<br><span style="color:#74736B;font-size:12px;">되돌릴 수 없어요.</span></div>
+          <div class="modal-actions">
+            <button class="btn-ghost" onclick="closeModal()">그만두기</button>
+            <button class="btn-danger" onclick="deleteCurrentList()">삭제</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  if (modal.type === "importConfirm") {
+    const itemCount = modal.lists.reduce((n,l) => n + l.items.length, 0);
+    const names = modal.lists.map(l => escapeHtml(l.name)).join(" · ");
+    root.innerHTML = `
+      <div class="modal-backdrop open" onclick="if(event.target===this) closeModal()">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div class="modal-head" id="modal-title">백업 파일을 가져올까요?</div>
+          <div class="modal-body">리스트 ${modal.lists.length}개 · 항목 ${itemCount}개를 찾았어요.<br><span style="color:#74736B;font-size:12px;">${names}</span><br><br>지금 있는 리스트는 그대로 두고 <b>새 리스트로 추가</b>해요. 공유 설정은 따라오지 않아요.</div>
+          <div class="modal-actions">
+            <button class="btn-ghost" onclick="closeModal()">그만두기</button>
+            <button class="btn-primary" onclick="applyImport()">가져오기</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  if (modal.type === "conflict") {
+    root.innerHTML = `
+      <div class="modal-backdrop open">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div class="modal-head" id="modal-title">다른 기기에서도 이 리스트가 바뀌었어요</div>
+          <div class="modal-body">내 기기와 다른 기기 양쪽에서 같은 리스트를 수정했어요. 조용히 덮어쓰지 않을게요 — 어느 쪽을 남길지 골라주세요.<br><span style="color:#74736B;font-size:12px;">"받은 내용 적용"은 다른 기기의 최신 내용으로, "내 것으로 유지"는 지금 내 화면 그대로 서버에 덮어써요.</span></div>
+          <div class="modal-actions">
+            <button class="btn-ghost" onclick="resolveConflictAcceptRemote()">받은 내용 적용</button>
+            <button class="btn-primary" onclick="resolveConflictKeepLocal()">내 것으로 유지</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  if (modal.type === "roomJoin") {
+    if (modal.error) {
+      root.innerHTML = `
+        <div class="modal-backdrop open">
+          <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+            <div class="modal-head" id="modal-title">공유 링크를 열 수 없어요</div>
+            <div class="modal-body">코드가 잘못됐거나 공유방을 찾을 수 없어요.</div>
+            <div class="modal-actions"><button class="btn-primary" onclick="declineRoomJoin()">확인</button></div>
+          </div>
+        </div>`;
+      return;
+    }
+    const data = modal.body && modal.body.data ? modal.body.data : { name: "공유 리스트", items: [] };
+    const count = Array.isArray(data.items) ? data.items.length : 0;
+    root.innerHTML = `
+      <div class="modal-backdrop open">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+          <div class="modal-head" id="modal-title">공유된 3초할일이에요</div>
+          <div class="modal-body">"${escapeHtml(data.name || '공유 리스트')}" 리스트(${count}개 항목)에 참여할까요? 참여하면 새 리스트로 추가되고, 이후 변경사항이 서로 실시간으로 동기화돼요.</div>
+          <div class="modal-actions">
+            <button class="btn-ghost" onclick="declineRoomJoin()">무시하기</button>
+            <button class="btn-primary" onclick="acceptRoomJoin()">참여하기</button>
+          </div>
+        </div>
+      </div>`;
+    return;
+  }
+
+  root.innerHTML = "";
+}
+
+/* ---------- 시작 ---------- */
+
+let initialFocusDone = false;
+
+// 1) 지금 있는 화면부터 바로 그린다 — 로딩 스피너도, 모달도, 클릭도 필요 없이 곧장 입력 가능.
+render();
+
+// 1.5) 다른 탭이 같은 데이터를 저장하면 이 탭의 메모리 상태가 낡아져 다음 저장 때
+//      그 변경분을 통째로 덮어쓸 수 있다(탭 간 덮어쓰기로 인한 조용한 유실, 2026-09-04 QA 발견).
+//      storage 이벤트로 다른 탭의 변경을 감지해 다시 읽어들인다. 모달이 열려있으면(상세 편집 등
+//      아직 저장 전인 로컬 임시 상태가 있을 수 있음) 그 화면을 밀어내지 않고 다음 기회로 미룬다.
+window.addEventListener("storage", (e) => {
+  if (e.key !== STORAGE_KEY) return;
+  // 모달이 열려 있으면 화면은 그대로 두고 "받을 게 있다"고만 표시해 둔다.
+  // 실제 반영은 이쪽이 저장할 때(commit) 또는 모달을 닫을 때(closeModal) 일어난다.
+  if (modal) { pendingExternal = true; return; }
+  adoptExternalChanges();
+  render();
+});
+
+// 2) 서비스워커 등록(오프라인 캐싱) — 입력 흐름과 무관하게 백그라운드에서.
+//    래퍼(Tauri) 안에서는 등록하지 않는다(위 isTauriRuntime 주석 참고). 웹은 그대로.
+if ("serviceWorker" in navigator && !isTauriRuntime()) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  });
+}
+
+// 3) 공유 링크(#room=코드)로 열렸는지는 렌더 이후 비동기로만 확인 — 있어도 모달은 나중에
+//    뜨고, 그 사이에도 입력창은 이미 포커스 가능한 상태다.
+checkForSharedRoomHash();
+
+// 4) 현재 리스트가 이미 공유 중이면 배경에서 최신 상태를 한 번 당겨온다(네트워크는
+//    "공유 켜진 리스트"에서만 발생 — 공유 안 쓰는 대다수 사용자에겐 아무 요청도 없다).
+if (getCurrentList().share) pullList(getCurrentList());
+
+// 5) 공유 중인 "현재" 리스트만 주기적으로 폴링한다(전체 리스트를 다 찌르지 않음 — 최소 요청).
+setInterval(() => {
+  const list = getCurrentList();
+  if (list.share && document.visibilityState === "visible") pullList(list);
+}, SYNC_POLL_MS);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    const list = getCurrentList();
+    if (list.share) pullList(list);
+  }
+});
+window.addEventListener("focus", () => {
+  const list = getCurrentList();
+  if (list.share) pullList(list);
+});
+
+// 6) 리마인더는 30초 간격으로 확인(브라우저 Notification API + 등록된 서비스워커로 로컬 알림).
+//    최초 알림은 사용자가 "알림 설정"을 눌렀을 때만 권한을 요청한다 — 페이지 로드 시점엔 절대 묻지 않음.
+setInterval(checkReminders, REMINDER_CHECK_MS);
+checkReminders();
+</script>
+</body>
+</html>
