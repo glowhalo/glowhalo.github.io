@@ -144,6 +144,7 @@
   .badge { font-size:10px; font-weight:600; padding:2px 8px; border-radius:999px; color:#fff; }
   .noloc { font-size:10px; font-weight:500; color:#9E4B34; }
   .autotag { font-size:10px; font-weight:500; color:#5C564F; }
+  .autofail { font-size:10px; font-weight:500; color:#9E4B34; }
   /* 예시 데이터 경고. 맨 아래 작은 글씨로는 안 읽힌다 — 내용보다 **위**에 둔다.
      (자매 앱 dividend-passbook f18f7ec의 .example-banner를 이 앱 팔레트에 맞춘 것) */
   /* 읽지 못한 저장값 안내. 예시 배너와 같은 골격을 쓰지만 색을 달리해 더 센 경고로 읽히게 한다. */
@@ -1140,13 +1141,17 @@ async function classifyLinkInBackground(id, url){
     if(!res.ok || json.error) throw new Error(json.error || `추출 실패 (${res.status})`);
     const meta = json.data || {};
     const guessedType = guessTypeFromText([meta.title, meta.description].filter(Boolean).join(" "));
-    const patch = { classifying:false };
+    const patch = { classifying:false, classifyFailed:false };
     if(meta.title && meta.title.trim()) patch.name = meta.title.trim().slice(0,80);
     if(guessedType) patch.types = [guessedType];
     applyAutoClassifyPatch(id, patch);
   } catch(err){
-    console.warn("링크 자동분류 실패(수동으로 채우면 돼요)", err);
-    applyAutoClassifyPatch(id, { classifying:false });
+    /* 실패를 **카드에 남긴다.** 예전에는 `console.warn`만 했는데, 그 문구가 하필
+       「수동으로 채우면 돼요」였다 — **보이지 않는 곳에서 사용자에게 할 말을 하고 있었다.**
+       실측(자율 QA 2026-09-28): 「분류중…」이 사라지고 이름이 호스트명인 카드만 남고 알림은 0건.
+       그게 최종인지 실패인지 알 수 없다. 워커는 등록 도메인 밖에서 403이라 드문 경로도 아니다. */
+    console.warn("링크 자동분류 실패", err);
+    applyAutoClassifyPatch(id, { classifying:false, classifyFailed:true });
   }
 }
 function applyAutoClassifyPatch(id, patch){
@@ -1618,7 +1623,8 @@ function editSave(id){
     memo: editBuffer.memo,
     ageRange: editBuffer.ageRange || undefined,
     amenities: editBuffer.amenities,
-    classifying: false // 사용자가 직접 저장했으니 이후 백그라운드 자동분류 결과로 덮어쓰지 않음
+    classifying: false,
+    classifyFailed: false   // 사용자가 직접 채웠으니 안내를 남겨 둘 이유가 없다 // 사용자가 직접 저장했으니 이후 백그라운드 자동분류 결과로 덮어쓰지 않음
   };
   editingId = null;
   editBuffer = null;
@@ -1764,6 +1770,7 @@ function placeCardHtml(p){
         <div class="pname">${esc(p.name)}</div>
         ${sourceIcon ? `<span class="psrc">${sourceIcon}</span>` : ""}
         ${stillClassifying ? `<span class="autotag">🔎 분류중</span>` : ""}
+        ${!stillClassifying && p.classifyFailed ? `<span class="autofail">🔎 이름을 못 가져왔어요 · 탭해서 수정</span>` : ""}
         <button class="starbtn" type="button" data-act="fav" data-id="${esc(p.id)}" aria-pressed="${!!p.favorite}" aria-label="즐겨찾기">${p.favorite ? "⭐" : "☆"}</button>
       </div>
       <div class="pcard-l2">

@@ -957,7 +957,9 @@ async function enableShare(){
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ data: { name: list.name, items: list.items } }),
     });
-    if (!res.ok) throw new Error("create failed");
+    /* 서버가 **응답은 했는데 거절한** 경우. 아래 catch의 "연결하지 못했다"와 구분하려고
+     * 상태 코드를 들고 간다 — 사용자에게도, 이 화면을 보고 고쳐야 하는 사람에게도 다른 일이다. */
+    if (!res.ok) throw Object.assign(new Error("create failed"), { httpStatus: res.status });
     const body = await res.json();
     const listId = list.id;
     commit(() => {
@@ -965,7 +967,14 @@ async function enableShare(){
       if (l) l.share = { code: body.code, version: body.version, updatedAt: body.updatedAt };
     });
   } catch(e) {
-    shareError = "공유방을 만들지 못했어요. 잠시 후 다시 시도해주세요.";
+    /* ⚠️ 예전에는 무엇이 잘못됐든 "잠시 후 다시 시도해주세요" 한 줄이었다(2026-09-28에 잡았다).
+     * 망이 끊긴 것과 **오리진이 막힌 것**은 사용자에게 전혀 다른 일이다 — 후자는 기다려도
+     * 영영 안 된다. 우리가 모르는 것을 아는 척하지 않는다:
+     *   · `fetch`가 예외를 던졌다 = 요청이 서버까지 **가지도 못했다**(망 끊김·오리진 차단)
+     *   · 응답이 not ok = 서버가 **답은 했는데 거절했다** — 상태 코드를 그대로 보여준다 */
+    shareError = e && e.httpStatus
+      ? `서버가 공유방 만들기를 거절했어요(${e.httpStatus}). 잠시 뒤 다시 눌러보고, 계속 안 되면 알려주세요.`
+      : "서버에 연결하지 못해 공유방을 만들지 못했어요. 인터넷 연결을 확인해주세요 — 연결이 멀쩡한데도 계속 안 되면 이 기기에서는 공유가 막혀 있는 것이라 기다려도 해결되지 않아요.";
   } finally {
     shareBusy = false;
     render();
