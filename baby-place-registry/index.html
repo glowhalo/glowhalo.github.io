@@ -125,6 +125,18 @@
   .sortsep { flex-shrink:0; width:1px; align-self:stretch; background:#EDE0D2; margin:0 2px; }
   .sortbtn { flex-shrink:0; padding:5px 11px; border-radius:999px; font-size:11px; font-weight:500; border:1px solid #EDE0D2; background:#fff; color:#5C564F; cursor:pointer; }
   .sortbtn.active { background:#3B2E2A; color:#FDF4EC; }
+  /* 여기도 `.filters`와 같은 문제였다 — 그때는 구분 칩 줄만 고치고 정렬행은 그대로 뒀다.
+     실측(23회차): 한 줄에 필요한 폭이 823px인데 폰은 320~390px이다. 그래서 **후기 필터 4개가
+     320·360·375·390px 어디서도 초기 화면에 없었다.** 가로 스크롤은 되지만,
+     위에 적어 둔 그대로 "여기 더 있다"가 보이지 않으면 없는 것과 같다. 그러니 접는다. */
+  @media (max-width: 860px) {
+    .sortrow { flex-wrap:wrap; overflow-x:visible; row-gap:6px; }
+    /* 접으면 구분선은 세로줄이 아니라 **줄바꿈**이 된다 — 정렬 / 후기 두 무리로 갈린다.
+       세로 1px짜리로 두면 줄이 접히는 자리에 따라 아무 데나 떠 버린다. */
+    .sortsep { width:100%; height:0; align-self:auto; background:none; margin:0; }
+    /* 라벨이 길어져도 화면을 밀지 않게 — `.fbtn`에 건 것과 같은 안전장치다. */
+    .sortbtn { max-width:100%; }
+  }
   .groupbtn.active { background:#3AAFA9; }
   .region-header { display:flex; align-items:baseline; gap:5px; font-size:12px; font-weight:600; color:#5C564F; padding:0 2px; margin-top:4px; }
   .region-header:first-of-type { margin-top:0; }
@@ -816,6 +828,18 @@ const MAX_IMPORT_RAW = 500;     // 화면에 안 나오지만 저장 공간을 �
 const clip = (v, n) => v.length > n ? v.slice(0, n) : v;
 const tooLong = (v, n) => typeof v === "string" && v.length > n;
 
+/* 길이에만 상한을 걸어 두고 **시각에는 아무 상한이 없었다**(24회차 실측).
+   파일의 `createdAt`이 숫자이기만 하면 그대로 들어와서, 1825일 미래로 적힌 기록 하나가
+   최신순 맨 위에 **영원히** 굳었다 — 그 뒤로 사용자가 뭘 새로 넣어도 `Date.now()`라 못 넘는다.
+   기기 시계가 앞선 폰에서 내보낸 백업이 평범한 도달 경로고, 이 앱엔 `createdAt`을 고치는 화면이
+   없어 사용자가 되돌릴 방법이 없다.
+   `NaN`·`Infinity`도 `typeof`는 "number"라 같이 막아 두지만, **이건 결함을 막는 게 아니다** —
+   `JSON.parse`가 그 둘을 아예 못 만들어서 파일 경로로는 들어올 수 없다(검사로 확인했다: 고치기
+   전 코드에서도 그 경우는 통과했다). 그래서 검사로는 안 남겼다. 헬퍼가 혼자 맞으라고 두는 것뿐이다. */
+const timeOutOfRange = (v, now) => typeof v === "number" && (!Number.isFinite(v) || v > now);
+const importedCreatedAt = (v, now) =>
+  (typeof v !== "number" || !Number.isFinite(v)) ? now : (v > now ? now : v);
+
 const BACKUP_APP = "baby-place-registry";
 const BACKUP_FORMAT = 1;
 
@@ -878,6 +902,8 @@ function pickBackupFile(){
 // 우리 백업 형식과, 장소 배열만 든 파일 둘 다 받는다.
 function parseBackup(text){
   const parsed = JSON.parse(text);
+  // 한 파일 안의 모든 기록이 같은 기준 시각을 쓴다 — 건마다 다시 재면 같은 파일인데 순서가 갈린다.
+  const importedAt = Date.now();
   const rawPlaces = Array.isArray(parsed) ? parsed
     : (parsed && Array.isArray(parsed.places) ? parsed.places : null);
   if(!rawPlaces) return null;
@@ -902,7 +928,9 @@ function parseBackup(text){
       amenities: Array.isArray(p.amenities) ? p.amenities.filter(a => AMENITY_KEYS.includes(a)) : [],
       lat: Number.isFinite(p.lat) ? p.lat : undefined,
       lng: Number.isFinite(p.lng) ? p.lng : undefined,
-      createdAt: typeof p.createdAt === "number" ? p.createdAt : Date.now()
+      createdAt: importedCreatedAt(p.createdAt, importedAt),
+      // 잘렸다는 사실을 들고 다니는 것과 같은 이유로, 시각을 고쳤다는 사실도 들고 다닌다.
+      timeFixed: timeOutOfRange(p.createdAt, importedAt)
     }));
   if(places.length === 0) return null;
   const rawTypes = parsed && Array.isArray(parsed.customTypes) ? parsed.customTypes : [];
@@ -1009,8 +1037,11 @@ function readBackupText(text){
     trimmed ? `장소 ${trimmed}건` : "",
     typesTrimmed ? `구분값 ${typesTrimmed}개` : ""
   ].filter(Boolean);
+  // 시각을 고친 것도 말한다. 조용히 고치면 사용자는 파일이 그대로 들어간 줄 안다(규칙 13과 같은 이유).
+  const timeFixed = fresh.filter(p => p.timeFixed).length;
   alert(`가져왔어요 — 장소 ${fresh.length}건` + (newTypes.length ? `, 구분값 ${newTypes.length}개` : "") + " 추가."
-    + (notes.length ? `\n(아주 긴 글자가 있어 ${notes.join(" · ")}은 줄여서 넣었어요.)` : ""));
+    + (notes.length ? `\n(아주 긴 글자가 있어 ${notes.join(" · ")}은 줄여서 넣었어요.)` : "")
+    + (timeFixed ? `\n(등록 시각이 미래로 적힌 ${timeFixed}건은 지금 시각으로 맞췄어요.)` : ""));
 }
 
 function renderFootnote(){
@@ -1874,7 +1905,14 @@ function createMarkerEl(place){
   const wrap = document.createElement("div");
   wrap.className = "pin";
   wrap.style.background = typeInfo.color;
-  wrap.innerHTML = `<span class="${subIcon ? 'pin-multi' : ''}">${esc(typeInfo.icon)}${subIcon}</span>`;
+  /* 한 줄 안에서 앞 아이콘은 esc()를 거치고 뒤 아이콘은 안 거치고 있었다(24회차 실측).
+     구분값의 아이콘은 사용자가 만들고 **가져오기 파일로도 들어온다** — 그리고 이 앱은
+     그 백업 파일을 shareList()로 남에게 보낸다. 받은 파일의 아이콘은 받은 사람이 만든 값이 아니다.
+     실측: 파일에 아이콘을 "<img src=x>"로 적으면 8자로 잘린 뒤에도 표식 안에 IMG **요소**가
+     생기고 바깥 </span>까지 속성으로 먹혔다. 지금 상한(앱 4자·파일 8자)으로는 스크립트가
+     실행되지 않으니 XSS는 아니지만, 그 상한은 이걸 막으려고 둔 게 아니라 화면이 깨지지 않게
+     둔 것이다 — 상한을 늘리는 순간 성격이 바뀐다. 한 줄 안에서 두 값을 다르게 다룰 이유가 없다. */
+  wrap.innerHTML = `<span class="${subIcon ? 'pin-multi' : ''}">${esc(typeInfo.icon)}${esc(subIcon)}</span>`;
   wrap.title = place.name;
   wrap.addEventListener("click", () => focusPlace(place.id));
   return wrap;

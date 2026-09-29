@@ -217,7 +217,16 @@ function isTauriRuntime(){
 // 마이그레이션 코드는 남겨 둘수록 읽는 사람을 헷갈리게 하는 부채일 뿐이다.
 const STORAGE_KEY = "todo3s_store_v1";
 
-function uid(){ return Date.now().toString(36) + Math.random().toString(36).slice(2, 8); }
+/* 같은 밀리초 안에서는 시계가 갈라 주지 못한다 — 그래서 **일련번호**를 끼운다.
+ * 무작위 6자(36^6 = 21억)만으로는 한 밀리초에 1000개 넘게 몰면 생일문제로 겹친다:
+ * 20만개 몰아치기 20회 중 1회에서 실제로 중복이 났다(2026-09-29 실측).
+ * 무작위 부분은 그대로 둔다 — 다른 탭·다른 기기와 안 겹치게 하는 건 그쪽 몫이다. */
+let uidSeq = 0;
+function uid(){
+  uidSeq = (uidSeq + 1) % 1679616;   // 36^4 — 한 밀리초에 167만개까지 안 돈다
+  return Date.now().toString(36) + uidSeq.toString(36).padStart(4, "0")
+    + Math.random().toString(36).slice(2, 8);
+}
 // 따옴표까지 이스케이프한다. 이 값들은 본문뿐 아니라 value="..." 같은 속성 안에도 들어가는데,
 // 따옴표를 남겨두면 사용자가 친 리스트 이름·검색어가 속성을 빠져나와 onfocus= 같은 걸 심을 수 있다.
 /**
