@@ -426,11 +426,20 @@ function renameCustomType(oldKey, newNameRaw){
     renderTypeManager();
     return;
   }
+  if(storageBroken){ refuseBrokenWrite(); renderTypeManager(); return; }
+  // 이름 바꾸기는 **두 키를 다 건드린다** — 구분값의 이름과, 그 이름을 쓰는 장소들.
+  // 하나만 저장되면 장소에 목록에 없는 구분값이 붙어 남고, 사용자는 화면에서 그걸 되돌릴 길이 없다.
   customTypes = customTypes.map(t => t.key===oldKey ? {...t, key:newName} : t);
   places = places.map(p => (p.types||[]).includes(oldKey) ? {...p, types:p.types.map(t => t===oldKey ? newName : t)} : p);
-  persistTypes();
-  persist();
+  const err = writeBothKeys();
   renderAll();
+  if(err){
+    // 되돌림이 끝난 상태다. 이름도, 장소의 구분값도 바꾸기 전 그대로다 — 그대로 말한다.
+    // 「"…"으로」는 받침 없는 이름에서 조사가 틀어진다. 조사를 쓰지 않는 문장으로 둔다.
+    alert(`저장 공간이 가득 차서 이름을 바꾸지 못했어요. "${oldKey}" 그대로 두었습니다.`
+      + "\n\n💾 내보내기로 기록을 파일에 빼둔 뒤 오래된 항목을 지우면 다시 바꿀 수 있어요."
+      + (err && err.name ? `\n\n(${err.name})` : ""));
+  }
 }
 function requestDeleteType(key){
   clearTimeout(pendingTypeDeleteTimer);
@@ -694,15 +703,17 @@ let lastSavedPlaces = null;   // 마지막으로 저장에 성공한 내용. 되
 let lastSavedTypes = null;
 let saveBroken = false;       // 연속 실패에 같은 알림을 쏟아내지 않기 위한 표시
 
-function writeLocal(key, json, onOk){
-  if(storageBroken){
-    // 마지막 사본을 지우지 않는다. 사용자가 «새로 시작»을 고르기 전까지는 아무것도 쓰지 않는다.
-    if(!saveBroken){
-      saveBroken = true;
-      alert("저장된 기록을 읽지 못한 상태라, 덮어쓰지 않으려고 저장을 멈춰 두었어요.\n\n위 안내에서 «읽지 못한 값 내려받기»로 파일을 빼 둔 뒤 «새로 시작»을 골라주세요.");
-    }
-    return false;
+// 마지막 사본을 지우지 않는다. 사용자가 «새로 시작»을 고르기 전까지는 아무것도 쓰지 않는다.
+// 한 번만 알린다. 두 키를 쓰는 자리(`renameCustomType`)도 같은 거절을 지나야 한다.
+function refuseBrokenWrite(){
+  if(!saveBroken){
+    saveBroken = true;
+    alert("저장된 기록을 읽지 못한 상태라, 덮어쓰지 않으려고 저장을 멈춰 두었어요.\n\n위 안내에서 «읽지 못한 값 내려받기»로 파일을 빼 둔 뒤 «새로 시작»을 골라주세요.");
   }
+  return false;
+}
+function writeLocal(key, json, onOk){
+  if(storageBroken) return refuseBrokenWrite();
   try {
     localStorage.setItem(key, json);
     if(onOk) onOk();
@@ -990,7 +1001,14 @@ function sameSpot(a, b){
    (자매 앱 dividend-passbook이 정확히 이 반쯤 저장으로 반려됐다.)
 
    그래서 둘을 한 덩어리로 쓰고, **하나라도 실패하면 둘 다 이전 값으로 되돌린다.** */
-function commitImport(){
+/* 두 키(`places`·`customTypes`)를 한 번에 쓴다. 하나라도 실패하면 **두 키와 메모리를 함께**
+   이전으로 되돌린다 — 반쯤 저장되는 걸 막는 유일한 경로다.
+   성공하면 `null`, 실패하면 그 `err`를 돌려준다. **알림 문구는 부르는 쪽이 정한다**:
+   「되돌렸습니다」 같은 말을 실제로 되돌아가지 않은 변경에 붙이면 안 되기 때문이다.
+   (자매 앱 `dividend-passbook`이 정확히 그 반쯤 저장으로 반려됐다.
+    2026-10-02: 가져오기만 이 경로를 쓰고 있었고, 구분값 이름 바꾸기는 `persistTypes()` →
+    `persist()`를 잇따라 불러 같은 구멍이 남아 있었다. 실측은 STATUS 27회차에.) */
+function writeBothKeys(){
   const prevPlacesRaw = localStorage.getItem(STORAGE_KEY);
   const prevTypesRaw = localStorage.getItem(TYPES_STORAGE_KEY);
   const prevPlaces = lastSavedPlaces, prevTypes = lastSavedTypes;
@@ -1001,7 +1019,7 @@ function commitImport(){
     lastSavedPlaces = placesJson;
     lastSavedTypes = typesJson;
     saveBroken = false;
-    return true;
+    return null;
   } catch(err){
     // 저장소를 통째로 이전으로 돌린다. 방금 실패한 쓰기가 자리를 먹지 않았으므로 되돌리기는 들어간다.
     restoreKey(STORAGE_KEY, prevPlacesRaw);
@@ -1014,11 +1032,16 @@ function commitImport(){
       if(prevTypes !== null) customTypes = JSON.parse(prevTypes);
     } catch(e){ /* 되돌릴 내용까지 깨졌으면 화면은 건드리지 않는다 */ }
     saveBroken = true;
-    alert("저장 공간이 부족해서 가져오지 못했어요. 아무것도 들어가지 않았습니다 — 장소도 구분값도 그대로입니다."
-      + "\n\n💾 내보내기로 기록을 파일에 빼둔 뒤 오래된 항목을 지우고 다시 시도해주세요."
-      + (err && err.name ? `\n\n(${err.name})` : ""));
-    return false;
+    return err || new Error("save failed");
   }
+}
+function commitImport(){
+  const err = writeBothKeys();
+  if(!err) return true;
+  alert("저장 공간이 부족해서 가져오지 못했어요. 아무것도 들어가지 않았습니다 — 장소도 구분값도 그대로입니다."
+    + "\n\n💾 내보내기로 기록을 파일에 빼둔 뒤 오래된 항목을 지우고 다시 시도해주세요."
+    + (err && err.name ? `\n\n(${err.name})` : ""));
+  return false;
 }
 
 function restoreKey(key, raw){
