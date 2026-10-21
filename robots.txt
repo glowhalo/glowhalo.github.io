@@ -1,3 +1,2 @@
 User-agent: *
 Disallow: /baby-place-registry/
-Disallow: /todo3s/
