@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>개인정보처리방침 — GlowHalo Group</title>
+<title>개인정보처리방침 — GlowHalo</title>
 <style>
   :root { color-scheme: light dark; }
   body { margin:0; background:#fbfbfd; color:#1b2233;
@@ -35,67 +35,64 @@
 <body>
 <main>
   <h1>개인정보처리방침</h1>
-  <p class="sub">GlowHalo Group 내부 자동화 도구 · 최종 갱신 2026-09-04</p>
+  <p class="sub">GlowHalo 내부 자동화 도구 · 최종 갱신 2026-11-08 · 시행 2026-09-04</p>
 
   <div class="box">
     <strong>이 방침이 적용되는 대상</strong><br>
-    GlowHalo Group이 자체 업무용으로 운영하는 내부 자동화 도구(<code>GlowHalo Drive</code> 등)입니다.
-    일반에 배포하거나 판매하지 않으며, 운영자 본인의 계정 데이터만 다룹니다.
+    GlowHalo가 자체 업무용으로 운영하는 Google Drive 자동화 도구(Google OAuth 동의 화면의 앱)입니다.
+    일반에 배포하거나 판매하지 않으며, 운영자 본인 계정의 데이터만 다룹니다.<br>
+    문의: <a href="mailto:help@glowhalo.org">help@glowhalo.org</a>
   </div>
 
-  <h2>1. 수집하는 정보</h2>
-  <p>
-    이 도구는 <strong>운영자가 직접 인증한 본인의 Google 계정</strong>에 한해,
-    Google Drive API의 전체(<code>drive</code>) 범위로 접근합니다. 이 범위는 운영자의
-    Google Drive 안에 있는 파일 전체(이 도구가 만들지 않은 기존 파일 포함)를 읽고, 쓰고,
-    삭제할 수 있습니다 — <strong>운영자 본인 계정 하나로만 한정</strong>되며, 다른 사용자의
-    데이터에는 접근하지 않습니다.
-  </p>
+  <h2>1. 처리하는 정보</h2>
+  <p>이 도구는 운영자가 직접 인증한 본인의 Google 계정에 한해 Google Drive API의 전체(drive) 범위로 접근합니다.
+    이 범위로는 운영자의 Google Drive에 있는 파일 전체(이 도구가 만들지 않은 기존 파일 포함)를 읽고, 쓰고, 삭제할 수 있습니다.
+    운영자가 이미 Drive에 보관해 온 작업 파일을 정리·검수해야 하므로, 도구가 만든 파일로 한정되는 범위로는 업무를 할 수 없습니다.
+    다른 사용자의 데이터에는 접근하지 않습니다.</p>
   <ul>
     <li>업무 파일(영상 프로젝트, 문서, 이미지 등)의 내용과 파일명</li>
-    <li>인증에 필요한 토큰</li>
+    <li>인증에 필요한 토큰과 Google 계정 식별 정보(이메일 주소) — 인증 목적으로만 처리</li>
   </ul>
-  <p>이름·연락처·결제정보 등 별도의 개인정보를 수집하지 않으며, 제3자로부터 정보를 제공받지 않습니다.</p>
+  <p>그 밖의 이름·연락처·결제정보는 수집하지 않습니다. 운영자가 폴더를 직접 공유한 서비스 계정으로 같은 Drive에 접근하는 경우에도 이 방침이 똑같이 적용됩니다.</p>
 
   <h2>2. 이용 목적</h2>
-  <p>
-    업무 자동화에만 사용합니다 — 작업 파일을 읽어 검수하고, 결과물을 저장하는 용도입니다.
-    광고, 프로파일링, 통계 판매 등 다른 목적에 사용하지 않습니다.
-  </p>
+  <ul>
+    <li>업무 자동화에만 사용합니다 — 작업 파일을 읽어 검수하고, 결과물을 저장하는 용도입니다.</li>
+    <li>광고, 프로파일링, 데이터 판매 등 다른 목적에는 사용하지 않습니다.</li>
+  </ul>
 
-  <h2>3. 제3자 제공 및 판매</h2>
-  <p>
-    <strong>어떤 데이터도 제3자에게 제공하거나 판매하지 않습니다.</strong>
-    Google Drive API로 얻은 정보는 광고 목적으로 사용하지 않으며,
-    <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API 서비스 사용자 데이터 정책</a>의
-    제한적 사용 요건을 준수합니다.
-  </p>
+  <h2>3. 제3자 제공·처리 위탁</h2>
+  <ul>
+    <li>어떤 데이터도 제3자에게 판매하거나 광고 목적으로 제공하지 않습니다.</li>
+    <li>운영자는 업무 처리에 AI 서비스(Anthropic Claude)를 사용합니다. 검수 과정에서 파일 내용이 이 서비스로 전달될 수 있으며,
+      이는 운영자 본인의 업무를 처리하기 위한 것입니다.</li>
+    <li>GlowHalo의 Google API 수신 정보 사용 및 다른 앱으로의 전송은 제한적 사용(Limited Use) 요건을 포함한
+      <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API 서비스 사용자 데이터 정책</a>을 준수합니다.
+      이 정보는 일반화된 AI/ML 모델의 개발·개선·학습에 사용하지 않으며, 보안·법령 준수 목적이 아닌 한 운영자 본인 외의 사람이 열람하지 않습니다.</li>
+  </ul>
 
   <h2>4. 보관 및 파기</h2>
-  <p>
-    파일은 운영자 본인의 Google Drive에 그대로 남으며, 처리 과정에서 만들어진 임시 사본은
-    작업이 끝나면 삭제됩니다. 인증 토큰은 접근이 통제된 자체 보관소에 저장하고,
-    운영자가 권한을 해제하면 즉시 무효화됩니다.
-  </p>
+  <p>파일은 운영자 본인의 Google Drive에 그대로 남습니다. 처리 중 만들어진 임시 파일은 작업 환경(일회용 작업 컨테이너)이 종료될 때 함께 삭제됩니다.
+    인증 토큰은 접근 권한자가 한정된 비밀 저장소에 보관하며, 권한이 해제되면 더 이상 사용할 수 없습니다.</p>
 
   <h2>5. 권한 해제</h2>
-  <p>
-    운영자는 언제든 <a href="https://myaccount.google.com/permissions">Google 계정 권한 관리</a>에서
-    이 도구의 접근 권한을 철회할 수 있습니다. 철회 즉시 모든 접근이 중단됩니다.
-  </p>
+  <p>운영자는 언제든 <a href="https://myaccount.google.com/permissions">Google 계정 권한 관리</a>에서 이 도구의 접근 권한을 철회할 수 있습니다.
+    서비스 계정의 접근은 해당 폴더의 공유를 해제하면 중단됩니다.</p>
 
   <h2>6. 보안</h2>
-  <p>
-    모든 통신은 HTTPS로 이루어지며, 인증 정보는 코드나 공개 저장소에 포함하지 않고
-    별도의 접근 통제된 보관소에서만 관리합니다.
-  </p>
+  <p>통신은 HTTPS로 이루어지며, 인증 정보는 코드나 공개 저장소에 포함하지 않습니다.</p>
 
-  <h2>7. 문의</h2>
-  <p>개인정보 관련 문의: <a href="mailto:help@glowhalo.org">help@glowhalo.org</a></p>
+  <h2>7. 방침 변경</h2>
+  <p>내용이 바뀌면 이 페이지의 갱신일을 고칩니다.</p>
 
-  <footer>
-    GlowHalo Group · <a href="https://glowhalo.github.io/">glowhalo.github.io</a>
-  </footer>
+  <h2 lang="en">English summary</h2>
+  <p lang="en">This policy covers GlowHalo's internal Google Drive automation tool. It accesses only the operator's own Google Drive (drive scope) to review and save work files.
+    Data is never sold or used for advertising. File contents may be processed by the AI service the operator uses for this work (Anthropic Claude).
+    GlowHalo's use and transfer to any other app of information received from Google APIs will adhere to the
+    <a href="https://developers.google.com/terms/api-services-user-data-policy">Google API Services User Data Policy</a>, including the Limited Use requirements.
+    Contact: help@glowhalo.org</p>
+
+  <footer>GlowHalo · glowhalo.github.io</footer>
 </main>
 </body>
 </html>
